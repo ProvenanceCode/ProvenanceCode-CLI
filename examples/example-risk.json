@@ -1,0 +1,23 @@
+{
+  "schema": "https://provenancecode.org/schemas/risk.g2.schema.json",
+  "risk_id": "RSK-MYAPP-CORE-000001",
+  "title": "Distributed system complexity and operational overhead",
+  "description": "Moving to microservices introduces significant complexity in operations, monitoring, and debugging. The team has limited experience with distributed systems patterns like circuit breakers, distributed tracing, and service mesh.",
+  "severity": "high",
+  "status": "monitoring",
+  "linked_decisions": [
+    "DEC-MYAPP-CORE-000001"
+  ],
+  "mitigation": "1) Invest in comprehensive observability stack (Prometheus, Grafana, Jaeger). 2) Provide team training on distributed systems. 3) Start with 2-3 services before scaling. 4) Implement service mesh (Istio) for traffic management. 5) Establish clear service ownership and on-call rotation.",
+  "impact": "If not properly managed, could lead to: increased system downtime, difficulty debugging production issues, slower feature development due to coordination overhead, and potential data inconsistencies.",
+  "probability": "medium",
+  "date_created": "2026-01-15T10:30:00Z",
+  "date_updated": "2026-02-10T09:15:00Z",
+  "owner": "jane.doe@example.com",
+  "tags": [
+    "architecture",
+    "operational-risk",
+    "complexity"
+  ]
+}
+

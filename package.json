@@ -1,0 +1,64 @@
+{
+  "name": "provenancecode-cli",
+  "version": "1.0.5",
+  "author": "KDDLC AI Solutions SL & Kieran Desmond <kieran.desmond@embankai.com>",
+  "description": "ProvenanceCode CLI - Bootstrap and validate ProvenanceCode G2 (v2.0) in your projects",
+  "main": "dist/index.js",
+  "bin": {
+    "prvc": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc && npm run copy-schemas",
+    "copy-schemas": "mkdir -p dist/schemas && cp src/schemas/*.json dist/schemas/",
+    "dev": "tsc --watch",
+    "prepublishOnly": "npm run build",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "prvc": "node dist/index.js",
+    "prvc:help": "npm run prvc -- --help",
+    "prvc:install": "npm run prvc -- install",
+    "prvc:migrate": "npm run prvc -- migrate",
+    "prvc:config": "npm run prvc -- config list",
+    "prvc:validate": "npm run prvc -- validate",
+    "prvc:quality": "npm run prvc -- quality",
+    "local:install": "npm install -g .",
+    "local:uninstall": "npm uninstall -g provenancecode-cli"
+  },
+  "keywords": [
+    "provenancecode",
+    "decision-records",
+    "adr",
+    "governance",
+    "cli"
+  ],
+
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/provenancecode/prvc.git"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "dependencies": {
+    "ajv": "^8.12.0",
+    "ajv-formats": "^2.1.1",
+    "chalk": "^4.1.2",
+    "commander": "^11.1.0",
+    "fs-extra": "^11.2.0",
+    "inquirer": "^8.2.6"
+  },
+  "devDependencies": {
+    "@types/fs-extra": "^11.0.4",
+    "@types/inquirer": "^8.2.10",
+    "@types/node": "^20.10.6",
+    "typescript": "^5.3.3"
+  },
+  "directories": {
+    "example": "examples"
+  },
+  "types": "./dist/index.d.ts",
+  "bugs": {
+    "url": "https://github.com/provenancecode/prvc/issues"
+  },
+  "homepage": "https://github.com/provenancecode/prvc#readme"
+}

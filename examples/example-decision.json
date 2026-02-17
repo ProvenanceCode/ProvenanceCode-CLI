@@ -1,0 +1,39 @@
+{
+  "schema": "https://provenancecode.org/schemas/decision.g2.schema.json",
+  "decision_id": "DEC-MYAPP-CORE-000001",
+  "title": "Adopt microservices architecture",
+  "status": "accepted",
+  "context": "Our monolithic application is becoming difficult to scale and maintain. Teams are blocked waiting for deployments. We need to improve deployment velocity and system scalability.",
+  "decision": "We will migrate to a microservices architecture over the next 12 months. We'll start by extracting the authentication service, followed by the payment processing service. Each microservice will have its own database and deploy independently.",
+  "consequences": "Positive: Improved deployment velocity, better fault isolation, technology flexibility per service. Negative: Increased operational complexity, need for distributed tracing, eventual consistency challenges.",
+  "risk": "Main risks include: complexity in managing distributed systems, data consistency across services, and the learning curve for the team. See RSK-MYAPP-CORE-000001 for detailed risk assessment.",
+  "links": [
+    {
+      "type": "pr",
+      "url": "https://github.com/example/repo/pull/123",
+      "title": "POC: Extract auth service"
+    },
+    {
+      "type": "doc",
+      "url": "https://example.com/docs/architecture-decision",
+      "title": "Architecture Decision Document"
+    },
+    {
+      "type": "risk",
+      "url": "RSK-MYAPP-CORE-000001",
+      "title": "Distributed system complexity risk"
+    }
+  ],
+  "date_created": "2026-01-15T10:00:00Z",
+  "date_updated": "2026-02-01T14:30:00Z",
+  "authors": [
+    "jane.doe@example.com",
+    "john.smith@example.com"
+  ],
+  "tags": [
+    "architecture",
+    "microservices",
+    "scalability"
+  ]
+}
+

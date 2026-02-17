@@ -1,0 +1,9 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "provenancecode.sequences@1.0",
+  "description": "ProvenanceCode v2.0 Sequence Tracking",
+  "version": "1.0",
+  "sequences": {
+  }
+}
+
