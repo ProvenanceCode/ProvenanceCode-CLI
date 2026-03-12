@@ -5,7 +5,8 @@
   "description": "ProvenanceCode CLI - Bootstrap and validate ProvenanceCode G2 (v2.0) in your projects",
   "main": "dist/index.js",
   "bin": {
-    "prvc": "dist/index.js"
+    "prvc": "dist/index.js",
+    "provcode": "dist/index.js"
   },
   "scripts": {
     "build": "tsc && npm run copy-schemas",

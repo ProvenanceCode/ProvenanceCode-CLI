@@ -15,13 +15,67 @@ import { installCommand } from './commands/install';
 import { migrateCommand } from './commands/migrate';
 import { configCommand } from './commands/config';
 import { starterpackCommand } from './commands/starterpack';
+import { loginCommand } from './commands/login';
+import { signCommand } from './commands/sign';
+import { verifyCommand } from './commands/verify';
+import { gitInstallHooksCommand } from './commands/git';
 
 const program = new Command();
 
 program
   .name('prvc')
-  .description('ProvenanceCode CLI - Bootstrap and validate ProvenanceCode G2 (v2.0)')
+  .description('ProvenanceCode CLI - Bootstrap, sign, verify, and validate ProvenanceCode artifacts')
   .version('1.0.0');
+
+// Login command
+program
+  .command('login')
+  .description('Authenticate and store a JWT token for identity operations')
+  .option('--provider <provider>', 'OAuth provider (github, google, azure, okta)', 'github')
+  .option('--api-url <url>', 'Override ProvenanceCode API URL')
+  .option('--token <token>', 'Provide JWT token directly')
+  .option('--no-browser', 'Do not auto-open browser')
+  .action((options) => {
+    loginCommand(options).catch((error: any) => {
+      console.error(chalk.red('Error:'), error.message);
+      process.exit(1);
+    });
+  });
+
+// Sign command
+program
+  .command('sign')
+  .description('Sign an artifact and generate .sig/.prov.json sidecars')
+  .argument('<artifact>', 'Artifact file path')
+  .option('--api-url <url>', 'Override ProvenanceCode API URL')
+  .option('--tool <tool>', 'Tool identity in attestation payload', 'prvc')
+  .option('--runtime <runtime>', 'Runtime identity in attestation payload', 'cli')
+  .option('--repo <repo>', 'Repository slug override (e.g. org/project)')
+  .option('--identity-token <token>', 'Identity token override')
+  .option('--no-attest', 'Skip /agent/attest and sign locally only')
+  .option('--no-log', 'Skip POST /provenance/log')
+  .action((artifact, options) => {
+    signCommand(process.cwd(), artifact, options).catch((error: any) => {
+      console.error(chalk.red('Error:'), error.message);
+      process.exit(1);
+    });
+  });
+
+// Verify command
+program
+  .command('verify')
+  .description('Verify an artifact against ProvenanceCode verification API')
+  .argument('<artifact>', 'Artifact file path')
+  .option('--api-url <url>', 'Override ProvenanceCode API URL')
+  .option('--sig <path>', 'Override signature sidecar path')
+  .option('--provenance <path>', 'Override provenance sidecar path')
+  .option('--identity-token <token>', 'Identity token override')
+  .action((artifact, options) => {
+    verifyCommand(process.cwd(), artifact, options).catch((error: any) => {
+      console.error(chalk.red('Error:'), error.message);
+      process.exit(1);
+    });
+  });
 
 // Install command (NEW)
 program
@@ -102,6 +156,24 @@ program
   .action((action, options) => {
     try {
       configCommand(process.cwd(), action || 'list', options);
+    } catch (error: any) {
+      console.error(chalk.red('Error:'), error.message);
+      process.exit(1);
+    }
+  });
+
+// Git command group
+const gitCommand = program
+  .command('git')
+  .description('Git integration utilities');
+
+gitCommand
+  .command('install-hooks')
+  .description('Install pre-commit and pre-push provenance hooks')
+  .option('--force', 'Overwrite existing hook files')
+  .action((options) => {
+    try {
+      gitInstallHooksCommand(process.cwd(), options);
     } catch (error: any) {
       console.error(chalk.red('Error:'), error.message);
       process.exit(1);
