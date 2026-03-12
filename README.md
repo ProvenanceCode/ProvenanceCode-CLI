@@ -16,6 +16,10 @@ The CLI enables developers to:
 - ✅ Generate decision and risk templates
 - ✅ Validate records locally
 - ✅ Add AI starter packs (Cursor, Claude Code, Antigravity)
+- ✅ Authenticate with ProvenanceCode identity (`prvc login`)
+- ✅ Sign AI artifacts with cryptographic provenance (`prvc sign`)
+- ✅ Verify signatures and certificates (`prvc verify`)
+- ✅ Install git hooks to enforce provenance sidecars (`prvc git install-hooks`)
 - ✅ Optionally add non-blocking CI validation
 - ✅ **NEW:** Quick decision journal for instant capture
 - ✅ **NEW:** Beautiful visualizations (graphs, timelines, stats)
@@ -56,6 +60,12 @@ prvc quality
 
 # Export to share
 npx prvc export --format=html --theme=dark
+
+# Identity + provenance flow
+prvc login
+prvc sign artifact.patch
+prvc verify artifact.patch
+prvc git install-hooks
 ```
 
 > **Note:** All examples use `npx prvc` (no installation required). If you install globally with `npm install -g provenancecode-cli`, you can use `prvc` directly. See [USAGE.md](USAGE.md) for details.
@@ -121,6 +131,59 @@ If `provenance/` already exists, `install` now runs a safe in-place v1 → v2 mi
 - Schema files
 - Config file
 - Templates
+
+### `prvc login`
+
+Authenticate with the ProvenanceCode API and store your JWT token locally.
+
+```bash
+prvc login
+
+# Optional: specify provider and API URL
+prvc login --provider=github --api-url=https://api.provenancecode.org
+```
+
+Token location:
+- `~/.provenancecode/token`
+
+### `prvc sign <artifact>`
+
+Sign an artifact with SHA256 + Ed25519 and produce sidecars:
+
+```bash
+prvc sign file.patch
+```
+
+Generated files:
+- `file.patch.sig`
+- `file.patch.prov.json`
+
+By default, `sign` attempts:
+- `POST /agent/attest`
+- `POST /provenance/log`
+
+### `prvc verify <artifact>`
+
+Verify artifact provenance using the API verification endpoint:
+
+```bash
+prvc verify file.patch
+```
+
+Calls:
+- `POST /verify`
+
+### `prvc git install-hooks`
+
+Install git hooks that enforce sidecar presence on AI artifacts.
+
+```bash
+prvc git install-hooks
+```
+
+Installs:
+- `.git/hooks/pre-commit`
+- `.git/hooks/pre-push`
 
 ### `prvc migrate`
 
