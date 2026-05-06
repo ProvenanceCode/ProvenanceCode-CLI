@@ -1,0 +1,246 @@
+```
+ProvenanceCode CLI Architecture: Binary vs npm Scripts
+═══════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────────────────────────┐
+│                      How ProvenanceCode CLI Works               │
+└─────────────────────────────────────────────────────────────────┘
+
+                         package.json
+                    ┌────────────────────┐
+                    │  {                 │
+                    │    "name": "pro... │
+                    │    "bin": {        │
+                    │      "prvc": "dist/│
+                    │    }               │
+                    │  }                 │
+                    └──────┬─────────────┘
+                           │
+                           │ npm install -g
+                           │ (or npx)
+                           ▼
+                    ┌────────────────────┐
+                    │  System Binary     │
+                    │  /usr/local/bin/   │
+                    │       prvc         │
+                    └──────┬─────────────┘
+                           │
+           ┌───────────────┼───────────────┐
+           │               │               │
+           ▼               ▼               ▼
+    ┌──────────┐    ┌──────────┐    ┌──────────┐
+    │  prvc    │    │  prvc    │    │  prvc    │
+    │  install │    │  config  │    │ validate │
+    └──────────┘    └──────────┘    └──────────┘
+    
+    These are COMMANDS in the binary, not npm scripts!
+
+
+┌─────────────────────────────────────────────────────────────────┐
+│                    END USER PERSPECTIVE                         │
+└─────────────────────────────────────────────────────────────────┘
+
+    Method 1: npx (No Installation)
+    ┌────────────────────────────────────────┐
+    │  $ npx prvc install                    │
+    │  $ npx prvc config set --app-code=MY   │
+    │  $ npx prvc validate                   │
+    └────────────────────────────────────────┘
+    
+    Method 2: Global Install
+    ┌────────────────────────────────────────┐
+    │  $ npm install -g provenancecode-cli   │
+    │  $ prvc install                        │
+    │  $ prvc validate                       │
+    └────────────────────────────────────────┘
+
+
+┌─────────────────────────────────────────────────────────────────┐
+│                  DEVELOPER PERSPECTIVE                          │
+│                (Working ON the CLI itself)                      │
+└─────────────────────────────────────────────────────────────────┘
+
+    Step 1: Build
+    ┌────────────────────────────────────────┐
+    │  $ npm run build                       │
+    │    └─> tsc && npm run copy-schemas    │
+    └────────────────────────────────────────┘
+    
+    Step 2: Test (via npm scripts)
+    ┌────────────────────────────────────────┐
+    │  $ npm run prvc:help                   │
+    │    └─> npm run prvc -- --help         │
+    │         └─> node dist/index.js --help │
+    │                                        │
+    │  $ npm run prvc -- install             │
+    │    └─> node dist/index.js install     │
+    └────────────────────────────────────────┘
+    
+    Step 3: Test Globally
+    ┌────────────────────────────────────────┐
+    │  $ npm run local:install               │
+    │    └─> npm install -g .               │
+    │  $ prvc install                        │
+    │  $ npm run local:uninstall             │
+    └────────────────────────────────────────┘
+
+
+┌─────────────────────────────────────────────────────────────────┐
+│              COMPARISON: CLI BINARY vs NPM SCRIPTS              │
+└─────────────────────────────────────────────────────────────────┘
+
+    ProvenanceCode CLI (Binary) ✅
+    ┌────────────────────────────────────────┐
+    │  $ npx prvc install                    │
+    │  $ prvc config set --app-code=MYAPP    │
+    │  $ prvc validate                       │
+    │                                        │
+    │  ✅ Works anywhere                     │
+    │  ✅ Standard CLI conventions           │
+    │  ✅ Can use with npx                   │
+    │  ✅ Like git, docker, npm              │
+    └────────────────────────────────────────┘
+    
+    If It Were npm Scripts ❌ (WRONG!)
+    ┌────────────────────────────────────────┐
+    │  $ npm run install                     │
+    │  $ npm run config                      │
+    │  $ npm run validate                    │
+    │                                        │
+    │  ❌ Only works in project root         │
+    │  ❌ Not standard conventions           │
+    │  ❌ Can't use with npx                 │
+    │  ❌ Confusing for users                │
+    └────────────────────────────────────────┘
+
+
+┌─────────────────────────────────────────────────────────────────┐
+│                    NPM SCRIPTS WE ADDED                         │
+│                   (For CLI Development)                         │
+└─────────────────────────────────────────────────────────────────┘
+
+    package.json
+    ┌────────────────────────────────────────────────────┐
+    │  "scripts": {                                      │
+    │    "build": "tsc && npm run copy-schemas",         │
+    │    "dev": "tsc --watch",                           │
+    │    "prvc": "node dist/index.js",                   │
+    │    "prvc:help": "npm run prvc -- --help",          │
+    │    "prvc:install": "npm run prvc -- install",      │
+    │    "prvc:validate": "npm run prvc -- validate",    │
+    │    "local:install": "npm install -g .",            │
+    │    "local:uninstall": "npm uninstall -g prvc"      │
+    │  }                                                 │
+    └────────────────────────────────────────────────────┘
+    
+    Purpose: DEVELOPMENT ONLY
+    - Build the CLI
+    - Test locally
+    - Install/uninstall for testing
+
+
+┌─────────────────────────────────────────────────────────────────┐
+│                    OTHER CLI EXAMPLES                           │
+└─────────────────────────────────────────────────────────────────┘
+
+    All these work the same way as prvc:
+    
+    Git (Binary)
+    ┌────────────────────────────────────────┐
+    │  $ git commit -m "message"             │
+    │  NOT: npm run git:commit               │
+    └────────────────────────────────────────┘
+    
+    Docker (Binary)
+    ┌────────────────────────────────────────┐
+    │  $ docker run image                    │
+    │  NOT: npm run docker:run               │
+    └────────────────────────────────────────┘
+    
+    TypeScript (Binary)
+    ┌────────────────────────────────────────┐
+    │  $ npx typescript --init               │
+    │  NOT: npm run typescript:init          │
+    └────────────────────────────────────────┘
+    
+    Create React App (Binary)
+    ┌────────────────────────────────────────┐
+    │  $ npx create-react-app my-app         │
+    │  NOT: npm run create-react-app         │
+    └────────────────────────────────────────┘
+
+
+┌─────────────────────────────────────────────────────────────────┐
+│                     COMMAND FLOW                                │
+└─────────────────────────────────────────────────────────────────┘
+
+    User runs: npx prvc install
+         │
+         ▼
+    npx downloads provenancecode-cli
+         │
+         ▼
+    Reads package.json "bin" field
+         │
+         ▼
+    Executes: node dist/index.js install
+         │
+         ▼
+    Commander.js parses "install" command
+         │
+         ▼
+    src/commands/install.ts runs
+         │
+         ▼
+    Creates provenance/ structure
+
+
+┌─────────────────────────────────────────────────────────────────┐
+│                     KEY TAKEAWAY                                │
+└─────────────────────────────────────────────────────────────────┘
+
+    ┌────────────────────────────────────────────────────┐
+    │                                                    │
+    │  ProvenanceCode CLI is a BINARY TOOL               │
+    │                                                    │
+    │  Use it like git, docker, or npm:                  │
+    │    → npx prvc <command>                            │
+    │    → npm install -g provenancecode-cli             │
+    │    → prvc <command>                                │
+    │                                                    │
+    │  The npm scripts in package.json are for           │
+    │  DEVELOPING the CLI, not USING it.                 │
+    │                                                    │
+    └────────────────────────────────────────────────────┘
+
+
+┌─────────────────────────────────────────────────────────────────┐
+│                   DOCUMENTATION GUIDE                           │
+└─────────────────────────────────────────────────────────────────┘
+
+    New to ProvenanceCode?
+    ┌────────────────────────────────────────┐
+    │  1. Read QUICKSTART.md                 │
+    │  2. Read USAGE.md                      │
+    │  3. Read QUICK_REFERENCE.md            │
+    └────────────────────────────────────────┘
+    
+    Confused about npm scripts?
+    ┌────────────────────────────────────────┐
+    │  1. Read CLI_VS_NPM_SCRIPTS.md         │
+    │  2. Read USAGE.md                      │
+    └────────────────────────────────────────┘
+    
+    Want to contribute?
+    ┌────────────────────────────────────────┐
+    │  1. Read CONTRIBUTING.md               │
+    │  2. Read PROJECT_SUMMARY.md            │
+    └────────────────────────────────────────┘
+
+
+═══════════════════════════════════════════════════════════════════
+
+For complete documentation, see: DOCUMENTATION_INDEX.md
+```
+
+

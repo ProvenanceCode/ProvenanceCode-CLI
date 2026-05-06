@@ -1,15 +1,14 @@
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import chalk from 'chalk';
-import { loadConfig } from '../utils';
-import { getNextSequenceNumber, generateDecisionId, getCurrentTimestamp } from '../utils';
+import { loadConfig, resolveProjectCode, resolveAreaCode, getNextSequenceNumber, generateDecisionId, getCurrentTimestamp, resolveGitAuthor } from '../utils';
 
 /**
  * Template command - Use smart templates
  */
 export function templateCommand(baseDir: string, action: string, templateName: string, options: any = {}): void {
   const config = loadConfig(baseDir);
-  
+
   if (!config) {
     console.log(chalk.red('❌ ProvenanceCode is not initialized in this directory.'));
     console.log(chalk.gray('   Run: npx prvc init'));
@@ -39,7 +38,7 @@ function listTemplates(): void {
   console.log();
 
   const templates = getBuiltInTemplates();
-  
+
   Object.keys(templates).forEach(key => {
     const template = templates[key];
     console.log(chalk.bold(key));
@@ -51,7 +50,7 @@ function listTemplates(): void {
 }
 
 /**
- * Use a template
+ * Use a template — emits DEO v1 record
  */
 function useTemplate(baseDir: string, config: any, templateName: string, options: any): void {
   const templates = getBuiltInTemplates();
@@ -64,27 +63,35 @@ function useTemplate(baseDir: string, config: any, templateName: string, options
   }
 
   const { title, area } = options;
+  const projectCode = resolveProjectCode(config);
+  const areaCode = resolveAreaCode(config, area);
   const decisionsPath = path.join(baseDir, config.paths.decisions);
-  const areaCode = area || config.defaultArea;
-  const sequence = getNextSequenceNumber(decisionsPath, config.defaultAppCode, areaCode);
-  const decisionId = generateDecisionId(config.defaultAppCode, areaCode, sequence);
+  const sequence = getNextSequenceNumber(decisionsPath, projectCode, areaCode);
+  const decisionId = generateDecisionId(projectCode, areaCode, sequence);
 
   const record = {
-    schema: 'https://provenancecode.org/schemas/decision.g2.schema.json',
-    decision_id: decisionId,
+    schema: 'provenancecode.decision.v1',
+    id: decisionId,
     title: title || template.defaultTitle,
-    status: 'draft',
-    context: template.context,
-    decision: template.decision,
-    consequences: template.consequences,
-    risk: template.risk,
-    date_created: getCurrentTimestamp(),
-    tags: template.tags
+    version: 1,
+    lifecycle: { state: 'draft' },
+    timestamps: { created_at: getCurrentTimestamp() },
+    actors: { author: resolveGitAuthor(baseDir) ?? 'unknown' },
+    outcome: template.outcome,
+    rationale: template.rationale,
+    risk: {
+      level: template.riskLevel ?? 'low',
+      description: template.riskDescription ?? ''
+    },
+    problem: template.problem,
+    options: template.options ?? [],
+    tags: template.tags ?? []
   };
 
   const filename = `${decisionId}.json`;
   const filepath = path.join(decisionsPath, filename);
-  
+
+  fs.ensureDirSync(decisionsPath);
   fs.writeJsonSync(filepath, record, { spaces: 2 });
 
   console.log(chalk.green(`✨ ${template.name} decision created!`));
@@ -97,7 +104,7 @@ function useTemplate(baseDir: string, config: any, templateName: string, options
 }
 
 /**
- * Get built-in templates
+ * Get built-in templates (DEO v1 field names)
  */
 function getBuiltInTemplates(): any {
   return {
@@ -105,78 +112,84 @@ function getBuiltInTemplates(): any {
       name: 'Architecture Decision',
       description: 'For significant architectural choices',
       defaultTitle: 'Architecture Decision: [Component/System]',
-      context: 'Describe the architectural challenge or need:\n- Current state of the system\n- What problem needs solving\n- Technical constraints\n- Business requirements',
-      decision: 'The architectural approach we will take:\n- Pattern/style chosen (e.g., microservices, event-driven, monolithic)\n- Key components and their responsibilities\n- Technology stack\n- Integration patterns',
-      consequences: 'Positive:\n- [List benefits: scalability, maintainability, performance, etc.]\n\nNegative:\n- [List drawbacks: complexity, cost, learning curve, etc.]\n\nTrade-offs:\n- [What we\'re optimizing for vs. what we\'re sacrificing]',
-      risk: 'Technical risks:\n- [Implementation challenges]\n- [Performance concerns]\n- [Scalability limits]\n\nMitigation:\n- [How we\'ll address each risk]',
+      problem: 'Describe the architectural challenge or need:\n- Current state of the system\n- What problem needs solving\n- Technical constraints\n- Business requirements',
+      outcome: 'The architectural approach we will take:\n- Pattern/style chosen (e.g., microservices, event-driven, monolithic)\n- Key components and their responsibilities\n- Technology stack\n- Integration patterns',
+      rationale: 'Why this architecture was chosen over alternatives:\n- Key trade-offs evaluated\n- Non-functional requirements addressed\n- Long-term sustainability',
+      riskLevel: 'medium',
+      riskDescription: 'Technical risks:\n- [Implementation challenges]\n- [Performance concerns]\n- [Scalability limits]\n\nMitigation:\n- [How we\'ll address each risk]',
       tags: ['architecture', 'technical-decision']
     },
-    
+
     security: {
       name: 'Security Decision',
       description: 'For security-related decisions and reviews',
       defaultTitle: 'Security Decision: [Feature/System]',
-      context: 'Security context:\n- What system/feature are we securing\n- Current security posture\n- Compliance requirements (SOC2, GDPR, etc.)\n- Threat model',
-      decision: 'Security approach:\n- Authentication/authorization strategy\n- Data protection measures\n- Security controls implemented\n- Monitoring and detection',
-      consequences: 'Security improvements:\n- [Enhanced protection]\n- [Compliance benefits]\n\nUsability impact:\n- [Effect on user experience]\n- [Developer workflow changes]',
-      risk: 'Security risks:\n- [Residual risks]\n- [Attack vectors]\n- [Compliance gaps]\n\nMitigation:\n- [Security controls]\n- [Monitoring]\n- [Incident response plan]',
+      problem: 'Security context:\n- What system/feature are we securing\n- Current security posture\n- Compliance requirements (SOC2, GDPR, etc.)\n- Threat model',
+      outcome: 'Security approach:\n- Authentication/authorization strategy\n- Data protection measures\n- Security controls implemented\n- Monitoring and detection',
+      rationale: 'Why this security approach was selected:\n- Compliance requirements addressed\n- Threat model considerations\n- Usability vs. security trade-offs',
+      riskLevel: 'high',
+      riskDescription: 'Security risks:\n- [Residual risks]\n- [Attack vectors]\n- [Compliance gaps]\n\nMitigation:\n- [Security controls]\n- [Monitoring]\n- [Incident response plan]',
       tags: ['security', 'compliance']
     },
-    
+
     'tech-debt': {
       name: 'Technical Debt Decision',
       description: 'For intentional technical debt decisions',
       defaultTitle: 'Tech Debt: [What We\'re Deferring]',
-      context: 'Why we\'re considering technical debt:\n- Business pressure or deadline\n- Current state of the code\n- What proper solution would require\n- Time/resource constraints',
-      decision: 'The shortcut we\'re taking:\n- What we\'re building (quick solution)\n- What we\'re NOT doing (proper solution)\n- When we plan to address this\n- How we\'ll track this debt',
-      consequences: 'Short-term:\n- [Ship faster]\n- [Reduced scope]\n\nLong-term:\n- [Code quality impact]\n- [Maintenance burden]\n- [Refactoring cost]',
-      risk: 'Debt accumulation risks:\n- [Code becomes unmaintainable]\n- [Bugs increase]\n- [Team velocity drops]\n\nPayback plan:\n- [When: Target quarter/date]\n- [How: Refactoring approach]\n- [Cost: Estimated effort]',
+      problem: 'Why we\'re considering technical debt:\n- Business pressure or deadline\n- Current state of the code\n- What proper solution would require\n- Time/resource constraints',
+      outcome: 'The shortcut we\'re taking:\n- What we\'re building (quick solution)\n- What we\'re NOT doing (proper solution)\n- When we plan to address this\n- How we\'ll track this debt',
+      rationale: 'Why this trade-off is acceptable right now:\n- Business context and deadline\n- Estimated cost of debt vs. cost of doing it right\n- Payback plan',
+      riskLevel: 'medium',
+      riskDescription: 'Debt accumulation risks:\n- [Code becomes unmaintainable]\n- [Bugs increase]\n- [Team velocity drops]\n\nPayback plan:\n- [When: Target quarter/date]\n- [How: Refactoring approach]\n- [Cost: Estimated effort]',
       tags: ['tech-debt', 'refactoring']
     },
-    
+
     api: {
       name: 'API Design Decision',
       description: 'For API design and versioning decisions',
       defaultTitle: 'API Decision: [Endpoint/Feature]',
-      context: 'API requirements:\n- Use case or feature need\n- Current API state\n- Client requirements\n- Integration constraints',
-      decision: 'API design:\n- Endpoint(s): [Methods and paths]\n- Request/response format\n- Authentication/authorization\n- Versioning strategy\n- Rate limiting',
-      consequences: 'API quality:\n- [RESTful compliance]\n- [Developer experience]\n- [Performance characteristics]\n\nMaintenance:\n- [Breaking changes]\n- [Backward compatibility]\n- [Deprecation strategy]',
-      risk: 'API risks:\n- [Breaking existing clients]\n- [Performance at scale]\n- [Security vulnerabilities]\n\nMitigation:\n- [Versioning]\n- [Documentation]\n- [Testing strategy]',
+      problem: 'API requirements:\n- Use case or feature need\n- Current API state\n- Client requirements\n- Integration constraints',
+      outcome: 'API design:\n- Endpoint(s): [Methods and paths]\n- Request/response format\n- Authentication/authorization\n- Versioning strategy\n- Rate limiting',
+      rationale: 'Why this API design was chosen:\n- REST vs. GraphQL vs. gRPC considerations\n- Client DX priorities\n- Backward compatibility strategy',
+      riskLevel: 'low',
+      riskDescription: 'API risks:\n- [Breaking existing clients]\n- [Performance at scale]\n- [Security vulnerabilities]\n\nMitigation:\n- [Versioning]\n- [Documentation]\n- [Testing strategy]',
       tags: ['api', 'design']
     },
-    
+
     database: {
       name: 'Database Decision',
       description: 'For database and data model decisions',
       defaultTitle: 'Database Decision: [Database/Schema]',
-      context: 'Data requirements:\n- What data needs storing\n- Access patterns\n- Scale requirements\n- Query complexity',
-      decision: 'Database approach:\n- Database choice (SQL/NoSQL/etc.)\n- Schema design\n- Indexing strategy\n- Partitioning/sharding plan',
-      consequences: 'Data quality:\n- [Consistency model]\n- [Query performance]\n- [Storage efficiency]\n\nOperational:\n- [Backup/recovery]\n- [Scaling approach]\n- [Migration complexity]',
-      risk: 'Data risks:\n- [Data loss scenarios]\n- [Performance degradation]\n- [Migration challenges]\n\nMitigation:\n- [Backup strategy]\n- [Monitoring]\n- [Testing approach]',
+      problem: 'Data requirements:\n- What data needs storing\n- Access patterns\n- Scale requirements\n- Query complexity',
+      outcome: 'Database approach:\n- Database choice (SQL/NoSQL/etc.)\n- Schema design\n- Indexing strategy\n- Partitioning/sharding plan',
+      rationale: 'Why this database was chosen:\n- Data model fit\n- Query pattern alignment\n- Operational expertise\n- Cost/licensing',
+      riskLevel: 'medium',
+      riskDescription: 'Data risks:\n- [Data loss scenarios]\n- [Performance degradation]\n- [Migration challenges]\n\nMitigation:\n- [Backup strategy]\n- [Monitoring]\n- [Testing approach]',
       tags: ['database', 'data-model']
     },
-    
+
     tooling: {
       name: 'Tooling Decision',
       description: 'For developer tooling and infrastructure',
       defaultTitle: 'Tooling Decision: [Tool/Service]',
-      context: 'Tooling need:\n- Current pain point or gap\n- Team requirements\n- Integration needs\n- Budget constraints',
-      decision: 'Tool selection:\n- Tool/service chosen\n- Alternative tools considered\n- Why this tool wins\n- Implementation plan',
-      consequences: 'Team impact:\n- [Productivity gain]\n- [Learning curve]\n- [Cost (time/money)]\n\nMaintenance:\n- [Ongoing effort]\n- [Vendor lock-in]\n- [Migration path]',
-      risk: 'Tool risks:\n- [Vendor dependency]\n- [Tool abandonment]\n- [Integration issues]\n\nMitigation:\n- [Exit strategy]\n- [Alternative options]\n- [Monitoring usage]',
+      problem: 'Tooling need:\n- Current pain point or gap\n- Team requirements\n- Integration needs\n- Budget constraints',
+      outcome: 'Tool selection:\n- Tool/service chosen\n- Alternative tools considered\n- Why this tool wins\n- Implementation plan',
+      rationale: 'Why this tool was selected over alternatives:\n- Key capabilities that differentiate it\n- Team familiarity and adoption curve\n- Total cost of ownership',
+      riskLevel: 'low',
+      riskDescription: 'Tool risks:\n- [Vendor dependency]\n- [Tool abandonment]\n- [Integration issues]\n\nMitigation:\n- [Exit strategy]\n- [Alternative options]\n- [Monitoring usage]',
       tags: ['tooling', 'infrastructure']
     },
-    
+
     performance: {
       name: 'Performance Optimization',
       description: 'For performance-related decisions',
       defaultTitle: 'Performance: [Optimization Area]',
-      context: 'Performance issue:\n- Current performance metrics\n- Performance requirements/SLA\n- Bottleneck identified\n- User impact',
-      decision: 'Optimization approach:\n- What we\'re optimizing\n- Technique/strategy used\n- Expected improvement\n- Trade-offs made',
-      consequences: 'Performance gains:\n- [Latency improvement]\n- [Throughput increase]\n- [Resource usage]\n\nComplexity:\n- [Code complexity added]\n- [Maintenance burden]\n- [Debugging difficulty]',
-      risk: 'Optimization risks:\n- [Premature optimization]\n- [New bottlenecks]\n- [Harder to maintain]\n\nValidation:\n- [Benchmarking approach]\n- [Monitoring strategy]\n- [Rollback plan]',
+      problem: 'Performance issue:\n- Current performance metrics\n- Performance requirements/SLA\n- Bottleneck identified\n- User impact',
+      outcome: 'Optimization approach:\n- What we\'re optimizing\n- Technique/strategy used\n- Expected improvement\n- Trade-offs made',
+      rationale: 'Why this optimization approach was chosen:\n- Profiling evidence\n- Complexity vs. gain trade-off\n- Alternative approaches considered',
+      riskLevel: 'low',
+      riskDescription: 'Optimization risks:\n- [Premature optimization]\n- [New bottlenecks]\n- [Harder to maintain]\n\nValidation:\n- [Benchmarking approach]\n- [Monitoring strategy]\n- [Rollback plan]',
       tags: ['performance', 'optimization']
     }
   };
 }
-

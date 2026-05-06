@@ -3,12 +3,13 @@ import * as path from 'path';
 import chalk from 'chalk';
 import { ProvenanceConfig } from '../types';
 import { getDecisionTemplate, getRiskTemplate, getProvenanceReadme } from '../templates';
-import { loadConfig, saveConfig } from '../utils';
+import { loadConfig, saveConfig, getCurrentTimestamp } from '../utils';
 
 interface MigrationOptions {
   appCode?: string;
   area?: string;
   silent?: boolean;
+  toDeo?: boolean;
 }
 
 interface MigrationResult {
@@ -35,6 +36,11 @@ const DEFAULT_SEQUENCES = {
  * CLI command wrapper for migration.
  */
 export function migrateCommand(baseDir: string, options: MigrationOptions = {}): void {
+  if (options.toDeo) {
+    migrateToDeo(baseDir, options);
+    return;
+  }
+
   console.log(chalk.blue('🔄 Migrating ProvenanceCode from v1 to v2...'));
   console.log();
 
@@ -47,6 +53,136 @@ export function migrateCommand(baseDir: string, options: MigrationOptions = {}):
   console.log(chalk.gray(`  Risks:     ${result.riskCount}`));
   console.log(chalk.gray(`  Created:   ${result.createdFiles.length} file(s)`));
   console.log(chalk.gray(`  Updated:   ${result.updatedFiles.length} file(s)`));
+  console.log();
+  console.log(chalk.bold('Next step:'));
+  console.log(chalk.cyan('  npx prvc validate'));
+  console.log();
+}
+
+/**
+ * Migrate g2/v2 decision records to DEO v1.0 format.
+ * Triggered by: prvc migrate --to-deo
+ */
+function migrateToDeo(baseDir: string, options: MigrationOptions): void {
+  console.log(chalk.blue('🔄 Migrating ProvenanceCode records to DEO v1.0...'));
+  console.log();
+
+  const config = loadConfig(baseDir);
+  if (!config) {
+    console.log(chalk.red('❌ ProvenanceCode is not initialized in this directory.'));
+    console.log(chalk.gray('   Run: npx prvc init'));
+    process.exit(1);
+  }
+
+  const decisionsPath = path.join(baseDir, config.paths.decisions);
+  if (!fs.existsSync(decisionsPath)) {
+    console.log(chalk.yellow('No decisions directory found.'));
+    return;
+  }
+
+  const OUTDATED = [
+    'provenancecode.decision.v2',
+    'https://provenancecode.org/schemas/decision.g2.schema.json'
+  ];
+
+  const files = fs.readdirSync(decisionsPath)
+    .filter(f => f.endsWith('.json') && f !== 'TEMPLATE.json');
+
+  let migratedCount = 0;
+  let skippedCount = 0;
+  const humanReviewFields: string[] = [];
+
+  files.forEach(file => {
+    const filePath = path.join(decisionsPath, file);
+    try {
+      const record = fs.readJsonSync(filePath);
+
+      if (!OUTDATED.includes(record.schema)) {
+        skippedCount++;
+        return;
+      }
+
+      const rawId: string = record.decision_id ?? record.id ?? '';
+      // Re-pad 6-digit hierarchical IDs to 7-digit: DEC-APP-AREA-000001 → DEC-APP-AREA-0000001
+      const deoId = rawId.replace(
+        /^(DEC-[A-Z0-9]{2,6}-[A-Z0-9]{2,6}-)([0-9]{6})$/,
+        (_m, prefix, seq) => `${prefix}${seq.padStart(7, '0')}`
+      );
+
+      const deoRecord: any = {
+        schema: 'provenancecode.decision.v1',
+        id: deoId || rawId,
+        title: record.title,
+        version: 1,
+        lifecycle: {
+          state: record.status === 'deprecated' ? 'superseded' : (record.status ?? 'draft')
+        },
+        timestamps: {
+          created_at: record.timestamps?.created_at ?? record.date_created ?? getCurrentTimestamp(),
+          ...(record.timestamps?.updated_at ?? record.date_updated
+            ? { updated_at: record.timestamps?.updated_at ?? record.date_updated }
+            : {})
+        },
+        actors: {
+          author: (Array.isArray(record.authors) && record.authors.length > 0)
+            ? record.authors[0]
+            : (record.actors?.author ?? 'unknown'),
+          ...(Array.isArray(record.authors) && record.authors.length > 1
+            ? { reviewers: record.authors.slice(1) }
+            : {})
+        },
+        outcome: record.decision ?? record.outcome ?? '',
+        rationale: record.rationale ?? '',
+        risk: typeof record.risk === 'string'
+          ? { level: 'low', description: record.risk }
+          : (record.risk ?? { level: 'low' })
+      };
+
+      // Carry over optional fields
+      if (record.context && typeof record.context === 'string') {
+        deoRecord.problem = record.context;
+      }
+      if (record.consequences) {
+        deoRecord.consequences = record.consequences;
+      }
+      if (Array.isArray(record.tags) && record.tags.length > 0) {
+        deoRecord.tags = record.tags;
+      }
+
+      // Warn about fields requiring human review
+      if (!deoRecord.rationale) {
+        humanReviewFields.push(`${file}: "rationale" is empty — fill in why this decision was made`);
+      }
+      if (!deoRecord.outcome) {
+        humanReviewFields.push(`${file}: "outcome" is empty — fill in what was decided`);
+      }
+
+      // Rename file if id changed (7-digit padding)
+      const newFilename = `${deoRecord.id}.json`;
+      const newPath = path.join(decisionsPath, newFilename);
+
+      fs.writeJsonSync(newPath, deoRecord, { spaces: 2 });
+      if (newPath !== filePath) {
+        fs.removeSync(filePath);
+      }
+
+      migratedCount++;
+    } catch {
+      console.log(chalk.yellow(`  ⚠️  Skipped (parse error): ${file}`));
+    }
+  });
+
+  console.log(chalk.green(`✅ DEO v1.0 migration completed`));
+  console.log();
+  console.log(chalk.gray(`  Migrated: ${migratedCount} file(s)`));
+  console.log(chalk.gray(`  Skipped (already DEO v1):  ${skippedCount} file(s)`));
+
+  if (humanReviewFields.length > 0) {
+    console.log();
+    console.log(chalk.yellow('⚠️  Fields requiring human review:'));
+    humanReviewFields.forEach(msg => console.log(chalk.yellow(`  • ${msg}`)));
+  }
+
   console.log();
   console.log(chalk.bold('Next step:'));
   console.log(chalk.cyan('  npx prvc validate'));
@@ -115,8 +251,10 @@ export function migrateToV2(baseDir: string, options: MigrationOptions = {}): Mi
     createdFiles.push(path.relative(baseDir, readmePath));
   }
 
-  const decisionIdMap = migrateDecisionRecords(decisionsDir, config.defaultAppCode, config.defaultArea, updatedFiles, baseDir);
-  const riskCount = migrateRiskRecords(risksDir, config.defaultAppCode, config.defaultArea, decisionIdMap, updatedFiles, baseDir);
+  const resolvedAppCode = config.defaultAppCode ?? appCode;
+  const resolvedArea = config.defaultArea ?? area;
+  const decisionIdMap = migrateDecisionRecords(decisionsDir, resolvedAppCode, resolvedArea, updatedFiles, baseDir);
+  const riskCount = migrateRiskRecords(risksDir, resolvedAppCode, resolvedArea, decisionIdMap, updatedFiles, baseDir);
   const decisionCount = Object.keys(decisionIdMap).length;
 
   if (!silent && (decisionCount > 0 || riskCount > 0)) {
@@ -133,13 +271,20 @@ export function migrateToV2(baseDir: string, options: MigrationOptions = {}): Mi
 
 function ensureConfig(baseDir: string, defaultAppCode: string, defaultArea: string): ProvenanceConfig {
   const existing = loadConfig(baseDir);
+  const appCode = ((existing?.defaultAppCode ?? existing?.id_format?.project) || defaultAppCode).toUpperCase();
+  const area = ((existing?.defaultArea ?? existing?.id_format?.subproject) || defaultArea).toUpperCase();
+
   const config: ProvenanceConfig = existing || {
-    standard: 'v2.0',
-    version: '2.0',
-    idScheme: 'DEC-{PROJECT}-{SUBPROJECT}-{SEQ6}',
-    riskIdScheme: 'RA-{PROJECT}-{SUBPROJECT}-{SEQ6}',
-    defaultAppCode,
-    defaultArea,
+    standard: 'deo',
+    version: '1.0',
+    defaultAppCode: appCode,
+    defaultArea: area,
+    id_format: {
+      style: 'hierarchical',
+      project: appCode,
+      subproject: area,
+      require_subproject: false
+    },
     paths: {
       root: 'provenance',
       decisions: 'provenance/decisions',
@@ -151,12 +296,16 @@ function ensureConfig(baseDir: string, defaultAppCode: string, defaultArea: stri
     }
   };
 
-  config.standard = 'v2.0';
-  config.version = '2.0';
-  config.idScheme = 'DEC-{PROJECT}-{SUBPROJECT}-{SEQ6}';
-  config.riskIdScheme = 'RA-{PROJECT}-{SUBPROJECT}-{SEQ6}';
-  config.defaultAppCode = (config.defaultAppCode || defaultAppCode).toUpperCase();
-  config.defaultArea = (config.defaultArea || defaultArea).toUpperCase();
+  config.defaultAppCode = appCode;
+  config.defaultArea = area;
+  if (!config.id_format) {
+    config.id_format = {
+      style: 'hierarchical',
+      project: appCode,
+      subproject: area,
+      require_subproject: false
+    };
+  }
   config.paths = {
     root: 'provenance',
     decisions: 'provenance/decisions',
@@ -321,4 +470,5 @@ function normalizeRiskId(id: string, defaultAppCode: string, defaultArea: string
 
   return id;
 }
+
 

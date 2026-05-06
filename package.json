@@ -1,15 +1,15 @@
 {
   "name": "provenancecode-cli",
-  "version": "1.0.5",
+  "version": "2.0.0",
   "author": "KDDLC AI Solutions SL & Kieran Desmond <kieran.desmond@embankai.com>",
-  "description": "ProvenanceCode CLI - Bootstrap and validate ProvenanceCode G2 (v2.0) in your projects",
+  "description": "ProvenanceCode CLI - Generate and validate Decision Evidence Objects (DEO v1.0)",
   "main": "dist/index.js",
   "bin": {
     "prvc": "dist/index.js"
   },
   "scripts": {
     "build": "tsc && npm run copy-schemas",
-    "copy-schemas": "mkdir -p dist/schemas && cp src/schemas/*.json dist/schemas/",
+    "copy-schemas": "mkdir -p dist/schemas && cp src/schemas/decision.v1.schema.json dist/schemas/ && cp src/schemas/risk.g2.schema.json dist/schemas/",
     "dev": "tsc --watch",
     "prepublishOnly": "npm run build",
     "test": "echo \"Error: no test specified\" && exit 1",

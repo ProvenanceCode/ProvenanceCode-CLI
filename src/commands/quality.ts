@@ -96,7 +96,7 @@ export function impactCommand(baseDir: string, decisionId: string): void {
   const decisions = loadAllDecisions(baseDir, config);
   const risks = loadAllRisks(baseDir, config);
 
-  const decision = decisions.find((d: any) => d.decision_id === decisionId);
+  const decision = decisions.find((d: any) => (d.id ?? d.decision_id) === decisionId);
   
   if (!decision) {
     console.log(chalk.red(`Decision not found: ${decisionId}`));
@@ -111,33 +111,42 @@ export function impactCommand(baseDir: string, decisionId: string): void {
   console.log(chalk.gray('─'.repeat(60)));
   console.log();
 
-  // Linked decisions
+  // Linked decisions (DEO v1 links.decisions array or legacy links array)
   const linkedDecisions: any[] = [];
   if (decision.links) {
-    decision.links.forEach((link: any) => {
-      if (link.type === 'decision') {
-        const linkedDec = decisions.find((d: any) => d.decision_id === link.url);
-        if (linkedDec) {
-          linkedDecisions.push(linkedDec);
+    if (Array.isArray(decision.links.decisions)) {
+      decision.links.decisions.forEach((linkedId: string) => {
+        const linkedDec = decisions.find((d: any) => (d.id ?? d.decision_id) === linkedId);
+        if (linkedDec) linkedDecisions.push(linkedDec);
+      });
+    } else if (Array.isArray(decision.links)) {
+      decision.links.forEach((link: any) => {
+        if (link.type === 'decision') {
+          const linkedDec = decisions.find((d: any) => (d.id ?? d.decision_id) === link.url);
+          if (linkedDec) linkedDecisions.push(linkedDec);
         }
-      }
-    });
+      });
+    }
   }
 
   // Decisions that link to this one
-  const incomingLinks = decisions.filter((d: any) => 
-    d.links && d.links.some((l: any) => l.url === decisionId)
-  );
+  const incomingLinks = decisions.filter((d: any) => {
+    if (Array.isArray(d.links?.decisions)) {
+      return d.links.decisions.includes(decisionId);
+    }
+    return Array.isArray(d.links) && d.links.some((l: any) => l.url === decisionId);
+  });
 
   // Related risks
-  const relatedRisks = risks.filter((r: any) => 
+  const relatedRisks = risks.filter((r: any) =>
     r.linked_decisions && r.linked_decisions.includes(decisionId)
   );
 
   // Superseded decisions
-  const superseded = decisions.filter((d: any) => 
-    d.links && d.links.some((l: any) => l.type === 'decision' && l.url === decisionId) &&
-    d.status === 'superseded'
+  const superseded = decisions.filter((d: any) =>
+    (d.lifecycle?.state ?? d.status) === 'superseded' &&
+    (d.lifecycle?.supersedes === decisionId ||
+      (Array.isArray(d.links) && d.links.some((l: any) => l.type === 'decision' && l.url === decisionId)))
   );
 
   console.log(chalk.bold('Direct Impact:'));
@@ -161,7 +170,7 @@ export function impactCommand(baseDir: string, decisionId: string): void {
     console.log(chalk.bold('Downstream Decisions:'));
     linkedDecisions.forEach((d: any) => {
       console.log(chalk.gray(`  📝 ${d.title}`));
-      console.log(chalk.dim(`     ${d.decision_id} - ${d.status}`));
+      console.log(chalk.dim(`     ${d.id ?? d.decision_id} - ${d.lifecycle?.state ?? d.status}`));
     });
     console.log();
   }
@@ -170,7 +179,7 @@ export function impactCommand(baseDir: string, decisionId: string): void {
     console.log(chalk.bold('Dependent Decisions:'));
     incomingLinks.forEach((d: any) => {
       console.log(chalk.gray(`  📝 ${d.title}`));
-      console.log(chalk.dim(`     ${d.decision_id} - ${d.status}`));
+      console.log(chalk.dim(`     ${d.id ?? d.decision_id} - ${d.lifecycle?.state ?? d.status}`));
     });
     console.log();
   }
@@ -204,12 +213,20 @@ function calculateQualityMetrics(decisions: any[], risks: any[]): any {
   };
 
   decisions.forEach(d => {
-    if (d.context && d.context.length > 10) metrics.withContext++;
+    // DEO v1 fields with legacy fallback
+    const problem = d.problem ?? (typeof d.context === 'string' ? d.context : '');
+    const riskVal = d.risk?.level ? d.risk.level : (typeof d.risk === 'string' ? d.risk : '');
+    const hasLinks = Array.isArray(d.links)
+      ? d.links.length > 0
+      : (d.links && Object.values(d.links).some((v: any) => Array.isArray(v) && v.length > 0));
+
+    if (problem && problem.length > 10) metrics.withContext++;
     if (d.consequences && d.consequences.length > 10) metrics.withConsequences++;
-    if (d.risk && d.risk.length > 10) metrics.withRisk++;
-    if (d.links && d.links.length > 0) metrics.withLinks++;
-    
-    metrics.statusCounts[d.status] = (metrics.statusCounts[d.status] || 0) + 1;
+    if (riskVal && riskVal.length > 0) metrics.withRisk++;
+    if (hasLinks) metrics.withLinks++;
+
+    const state = d.lifecycle?.state ?? d.status;
+    metrics.statusCounts[state] = (metrics.statusCounts[state] || 0) + 1;
   });
 
   risks.forEach(r => {
@@ -302,4 +319,5 @@ function loadAllRisks(baseDir: string, config: any): any[] {
     }
   }).filter(Boolean);
 }
+
 

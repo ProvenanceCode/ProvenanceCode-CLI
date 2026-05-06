@@ -6,37 +6,53 @@ import { ValidationResult, ProvenanceConfig } from './types';
 import { getDecisionFiles, getRiskFiles, validateDecisionId, validateRiskId } from './utils';
 
 // Load schemas
-const decisionSchema = require('./schemas/decision.g2.schema.json');
+const decisionSchema = require('./schemas/decision.v1.schema.json');
 const riskSchema = require('./schemas/risk.g2.schema.json');
+
+// Outdated schema identifiers that must be rejected with an error
+const OUTDATED_SCHEMA_IDS = [
+  'provenancecode.decision.v2',
+  'https://provenancecode.org/schemas/decision.g2.schema.json'
+];
 
 /**
  * Create an AJV instance with schemas loaded
  */
 function createValidator(): Ajv {
-  const ajv = new Ajv({ 
+  const ajv = new Ajv({
     allErrors: true,
     verbose: true,
     strict: false
   });
-  
+
   addFormats(ajv);
-  
+
   ajv.addSchema(decisionSchema, 'decision');
   ajv.addSchema(riskSchema, 'risk');
-  
+
   return ajv;
 }
 
 /**
- * Validate a single decision file
+ * Validate a single decision file against DEO v1 schema
  */
 function validateDecisionFile(filePath: string, ajv: Ajv, result: ValidationResult): void {
   try {
     const data = fs.readJsonSync(filePath);
-    
-    // Validate against schema
+
+    // Reject outdated schema identifiers with an error (not a warning)
+    if (OUTDATED_SCHEMA_IDS.includes(data.schema)) {
+      result.errors.push({
+        file: filePath,
+        message: `Outdated schema identifier "${data.schema}" — must be "provenancecode.decision.v1"`
+      });
+      result.valid = false;
+      return;
+    }
+
+    // Validate against DEO v1 JSON Schema
     const valid = ajv.validate('decision', data);
-    
+
     if (!valid && ajv.errors) {
       ajv.errors.forEach(error => {
         result.errors.push({
@@ -47,32 +63,31 @@ function validateDecisionFile(filePath: string, ajv: Ajv, result: ValidationResu
       });
       result.valid = false;
     }
-    
-    // Additional validations
-    if (data.decision_id && !validateDecisionId(data.decision_id)) {
+
+    // ID validation: read DEO v1 `id` first, fall back to legacy `decision_id`
+    const idField = data.id ?? data.decision_id;
+    if (idField && !validateDecisionId(idField)) {
       result.errors.push({
         file: filePath,
-        message: `Invalid decision_id format: ${data.decision_id}`
+        message: `Invalid id format: ${idField}`
       });
       result.valid = false;
     }
-    
-    // Check schema URL
-    if (data.schema !== 'provenancecode.decision.v2' && data.schema !== 'https://provenancecode.org/schemas/decision.g2.schema.json') {
+
+    // Recommended field warnings (DEO v1)
+    if (!data.rationale) {
       result.warnings.push({
         file: filePath,
-        message: `Schema identifier should be 'provenancecode.decision.v2' (v2.0 standard): ${data.schema}`
+        message: 'Recommended field "rationale" is missing'
       });
     }
-    
-    // Warn on missing optional but recommended fields
-    if (!data.consequences) {
+    if (!data.outcome) {
       result.warnings.push({
         file: filePath,
-        message: 'Recommended field "consequences" is missing'
+        message: 'Recommended field "outcome" is missing'
       });
     }
-    
+
   } catch (error: any) {
     result.errors.push({
       file: filePath,
@@ -88,10 +103,10 @@ function validateDecisionFile(filePath: string, ajv: Ajv, result: ValidationResu
 function validateRiskFile(filePath: string, ajv: Ajv, result: ValidationResult): void {
   try {
     const data = fs.readJsonSync(filePath);
-    
+
     // Validate against schema
     const valid = ajv.validate('risk', data);
-    
+
     if (!valid && ajv.errors) {
       ajv.errors.forEach(error => {
         result.errors.push({
@@ -102,7 +117,7 @@ function validateRiskFile(filePath: string, ajv: Ajv, result: ValidationResult):
       });
       result.valid = false;
     }
-    
+
     // Additional validations
     if (data.risk_id && !validateRiskId(data.risk_id)) {
       result.errors.push({
@@ -111,15 +126,15 @@ function validateRiskFile(filePath: string, ajv: Ajv, result: ValidationResult):
       });
       result.valid = false;
     }
-    
-    // Check schema URL  
+
+    // Check schema URL
     if (data.schema !== 'provenancecode.risk.v2' && data.schema !== 'https://provenancecode.org/schemas/risk.g2.schema.json') {
       result.warnings.push({
         file: filePath,
         message: `Schema identifier should be 'provenancecode.risk.v2' (v2.0 standard): ${data.schema}`
       });
     }
-    
+
     // Validate linked decision IDs
     if (data.linked_decisions && Array.isArray(data.linked_decisions)) {
       data.linked_decisions.forEach((decId: string) => {
@@ -132,7 +147,7 @@ function validateRiskFile(filePath: string, ajv: Ajv, result: ValidationResult):
         }
       });
     }
-    
+
   } catch (error: any) {
     result.errors.push({
       file: filePath,
@@ -151,25 +166,24 @@ export function validateProvenance(baseDir: string, config: ProvenanceConfig): V
     errors: [],
     warnings: []
   };
-  
+
   const ajv = createValidator();
-  
+
   // Validate decision files
   const decisionsPath = path.join(baseDir, config.paths.decisions);
   const decisionFiles = getDecisionFiles(decisionsPath);
-  
+
   decisionFiles.forEach(file => {
     validateDecisionFile(file, ajv, result);
   });
-  
+
   // Validate risk files
   const risksPath = path.join(baseDir, config.paths.risks);
   const riskFiles = getRiskFiles(risksPath);
-  
+
   riskFiles.forEach(file => {
     validateRiskFile(file, ajv, result);
   });
-  
+
   return result;
 }
-

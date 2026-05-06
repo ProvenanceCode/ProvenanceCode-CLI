@@ -30,9 +30,9 @@ export function searchCommand(baseDir: string, query: string, options: any = {})
     allRecords = allRecords.concat(risks.map((r: any) => ({ ...r, _type: 'risk' })));
   }
 
-  // Filter by status if specified
+  // Filter by status if specified (DEO v1 lifecycle.state, fall back to legacy status)
   if (status) {
-    allRecords = allRecords.filter((r: any) => r.status === status);
+    allRecords = allRecords.filter((r: any) => (r.lifecycle?.state ?? r.status) === status);
   }
 
   // Search
@@ -54,10 +54,11 @@ export function searchCommand(baseDir: string, query: string, options: any = {})
   topResults.forEach((result: any, index: number) => {
     const record = result.record;
     const icon = record._type === 'decision' ? '📝' : '⚠️';
-    const id = record.decision_id || record.risk_id;
-    
+    const id = record.id ?? record.decision_id ?? record.risk_id;
+    const state = record.lifecycle?.state ?? record.status;
+
     console.log(chalk.bold(`${index + 1}. ${icon} ${record.title}`));
-    console.log(chalk.gray(`   ID: ${id} | Status: ${record.status} | Score: ${result.score.toFixed(0)}`));
+    console.log(chalk.gray(`   ID: ${id} | Status: ${state} | Score: ${result.score.toFixed(0)}`));
     
     if (result.highlight) {
       console.log(chalk.gray(`   ...${result.highlight}...`));
@@ -85,7 +86,7 @@ export function relatedCommand(baseDir: string, decisionId: string): void {
   const decisions = loadAllDecisions(baseDir, config);
   const risks = loadAllRisks(baseDir, config);
 
-  const decision = decisions.find((d: any) => d.decision_id === decisionId);
+  const decision = decisions.find((d: any) => (d.id ?? d.decision_id) === decisionId);
   
   if (!decision) {
     console.log(chalk.red(`Decision not found: ${decisionId}`));
@@ -96,23 +97,28 @@ export function relatedCommand(baseDir: string, decisionId: string): void {
   console.log(chalk.bold(decision.title));
   console.log();
 
-  // Find directly linked decisions
+  // Find directly linked decisions (DEO v1 links.decisions, or legacy links array)
   const linkedDecisions: any[] = [];
   if (decision.links) {
-    decision.links.forEach((link: any) => {
-      if (link.type === 'decision') {
-        const linkedDec = decisions.find((d: any) => d.decision_id === link.url);
-        if (linkedDec) {
-          linkedDecisions.push(linkedDec);
+    if (Array.isArray(decision.links.decisions)) {
+      decision.links.decisions.forEach((linkedId: string) => {
+        const linkedDec = decisions.find((d: any) => (d.id ?? d.decision_id) === linkedId);
+        if (linkedDec) linkedDecisions.push(linkedDec);
+      });
+    } else if (Array.isArray(decision.links)) {
+      decision.links.forEach((link: any) => {
+        if (link.type === 'decision') {
+          const linkedDec = decisions.find((d: any) => (d.id ?? d.decision_id) === link.url);
+          if (linkedDec) linkedDecisions.push(linkedDec);
         }
-      }
-    });
+      });
+    }
   }
 
   if (linkedDecisions.length > 0) {
     console.log(chalk.bold('Linked Decisions:'));
     linkedDecisions.forEach((d: any) => {
-      console.log(chalk.gray(`  • ${d.decision_id}: ${d.title}`));
+      console.log(chalk.gray(`  • ${d.id ?? d.decision_id}: ${d.title}`));
     });
     console.log();
   }
@@ -166,9 +172,9 @@ export function showCommand(baseDir: string, id: string): void {
   const decisions = loadAllDecisions(baseDir, config);
   const risks = loadAllRisks(baseDir, config);
 
-  let record = decisions.find((d: any) => d.decision_id === id);
+  let record = decisions.find((d: any) => (d.id ?? d.decision_id) === id);
   let type = 'decision';
-  
+
   if (!record) {
     record = risks.find((r: any) => r.risk_id === id);
     type = 'risk';
@@ -186,38 +192,61 @@ export function showCommand(baseDir: string, id: string): void {
   console.log();
   console.log(chalk.gray('─'.repeat(60)));
   console.log();
+  const state = record.lifecycle?.state ?? record.status;
   console.log(chalk.bold('ID:'), chalk.cyan(id));
-  console.log(chalk.bold('Status:'), getStatusColor(record.status)(record.status));
-  
+  console.log(chalk.bold('Status:'), getStatusColor(state)(state));
+
   if (type === 'decision') {
+    const problem = record.problem ?? (typeof record.context === 'string' ? record.context : '');
+    const outcome = record.outcome ?? record.decision;
+    const riskLevel = record.risk?.level ?? (typeof record.risk === 'string' ? record.risk : '');
+
+    if (problem) {
+      console.log();
+      console.log(chalk.bold('Problem:'));
+      console.log(formatText(problem));
+    }
     console.log();
-    console.log(chalk.bold('Context:'));
-    console.log(formatText(record.context));
-    console.log();
-    console.log(chalk.bold('Decision:'));
-    console.log(formatText(record.decision));
-    
+    console.log(chalk.bold('Outcome:'));
+    console.log(formatText(outcome));
+
+    if (record.rationale) {
+      console.log();
+      console.log(chalk.bold('Rationale:'));
+      console.log(formatText(record.rationale));
+    }
+
     if (record.consequences) {
       console.log();
       console.log(chalk.bold('Consequences:'));
       console.log(formatText(record.consequences));
     }
-    
-    if (record.risk) {
+
+    if (riskLevel) {
       console.log();
-      console.log(chalk.bold('Risk Assessment:'));
-      console.log(formatText(record.risk));
+      console.log(chalk.bold('Risk Level:'), riskLevel);
+      if (record.risk?.description) {
+        console.log(formatText(record.risk.description));
+      }
     }
-    
-    if (record.links && record.links.length > 0) {
-      console.log();
-      console.log(chalk.bold('Links:'));
-      record.links.forEach((link: any) => {
-        console.log(chalk.gray(`  • [${link.type}] ${link.url}`));
-        if (link.title) {
-          console.log(chalk.dim(`    ${link.title}`));
-        }
-      });
+
+    // DEO v1 links object or legacy links array
+    if (record.links) {
+      const linkEntries: string[] = [];
+      if (Array.isArray(record.links)) {
+        record.links.forEach((link: any) => linkEntries.push(`[${link.type}] ${link.url}`));
+      } else {
+        Object.entries(record.links).forEach(([type, urls]: [string, any]) => {
+          if (Array.isArray(urls)) {
+            urls.forEach((u: string) => linkEntries.push(`[${type}] ${u}`));
+          }
+        });
+      }
+      if (linkEntries.length > 0) {
+        console.log();
+        console.log(chalk.bold('Links:'));
+        linkEntries.forEach(entry => console.log(chalk.gray(`  • ${entry}`)));
+      }
     }
   } else {
     console.log(chalk.bold('Severity:'), getSeverityColor(record.severity)(record.severity));
@@ -245,9 +274,10 @@ export function showCommand(baseDir: string, id: string): void {
     console.log(chalk.bold('Tags:'), record.tags.join(', '));
   }
   
-  if (record.date_created) {
+  const createdAt = record.timestamps?.created_at ?? record.date_created;
+  if (createdAt) {
     console.log();
-    console.log(chalk.gray(`Created: ${new Date(record.date_created).toLocaleString()}`));
+    console.log(chalk.gray(`Created: ${new Date(createdAt).toLocaleString()}`));
   }
   
   console.log();
@@ -350,7 +380,7 @@ function getStatusColor(status: string): any {
     case 'rejected': return chalk.red;
     case 'proposed': return chalk.yellow;
     case 'draft': return chalk.gray;
-    case 'deprecated': return chalk.dim;
+    case 'superseded': return chalk.dim;
     default: return chalk.white;
   }
 }
@@ -367,4 +397,5 @@ function getSeverityColor(severity: string): any {
     default: return chalk.white;
   }
 }
+
 

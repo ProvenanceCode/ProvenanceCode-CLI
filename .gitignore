@@ -4,4 +4,6 @@ dist/
 .DS_Store
 .env
 *.tsbuildinfo
+.npmrc
+
 

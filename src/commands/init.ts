@@ -18,7 +18,7 @@ import {
  */
 export function initCommand(baseDir: string, options: InitOptions): void {
   const {
-    standard = 'g2',
+    standard = 'deo',
     appCode = 'MYAPP',
     area = 'CORE',
     ai = [],
@@ -27,7 +27,7 @@ export function initCommand(baseDir: string, options: InitOptions): void {
     force = false
   } = options;
 
-  console.log(chalk.blue('🚀 Initializing ProvenanceCode G2...'));
+  console.log(chalk.blue('🚀 Initializing ProvenanceCode (DEO v1.0)...'));
   console.log();
 
   const provenanceDir = path.join(baseDir, 'provenance');
@@ -57,12 +57,16 @@ export function initCommand(baseDir: string, options: InitOptions): void {
     // Create config
     console.log(chalk.gray('⚙️  Creating configuration...'));
     const config: ProvenanceConfig = {
-      standard: standard,
-      version: '2.0',
-      idScheme: `DEC-{APP}-{AREA}-{SEQ6}`,
-      riskIdScheme: `RA-{PROJECT}-{SUBPROJECT}-{SEQ6}`,
+      standard: 'deo',
+      version: '1.0',
       defaultAppCode: appCode.toUpperCase(),
       defaultArea: area.toUpperCase(),
+      id_format: {
+        style: 'hierarchical',
+        project: appCode.toUpperCase(),
+        subproject: area.toUpperCase(),
+        require_subproject: false
+      },
       paths: {
         root: 'provenance',
         decisions: 'provenance/decisions',
@@ -70,7 +74,7 @@ export function initCommand(baseDir: string, options: InitOptions): void {
         schemas: 'provenance/schemas'
       },
       validation: {
-        mode: ciMode
+        mode: ciMode ?? 'warn'
       }
     };
     
@@ -122,11 +126,11 @@ export function initCommand(baseDir: string, options: InitOptions): void {
 
   // Success message
   console.log();
-  console.log(chalk.green('✨ ProvenanceCode G2 initialized successfully!'));
+  console.log(chalk.green('✨ ProvenanceCode (DEO v1.0) initialized successfully!'));
   console.log();
   console.log(chalk.bold('Next steps:'));
   console.log(chalk.gray('  1. Review configuration:'), chalk.cyan('cat provenance/provenance.config.json'));
-  console.log(chalk.gray('  2. Create your first decision:'), chalk.cyan('cp provenance/decisions/TEMPLATE.json provenance/decisions/DEC-' + appCode + '-' + area + '-000001.json'));
+  console.log(chalk.gray('  2. Record your first decision:'), chalk.cyan(`prvc journal add "My first decision" --outcome="What we decided" --rationale="Why we decided it"`));
   console.log(chalk.gray('  3. Validate records:'), chalk.cyan('npx prvc validate'));
   console.log();
   console.log(chalk.gray('📖 Documentation: https://provenancecode.org'));
@@ -217,22 +221,24 @@ export function addStarterCommand(baseDir: string, aiTool: string): void {
   }
 
   const config: ProvenanceConfig = fs.readJsonSync(configPath);
-  
+  const appCodeVal = config.defaultAppCode ?? config.id_format?.project ?? 'MYAPP';
+  const areaVal = config.defaultArea ?? config.id_format?.subproject ?? 'CORE';
+
   console.log(chalk.blue(`🤖 Installing ${aiTool} starter pack...`));
-  
+
   switch (aiTool.toLowerCase()) {
     case 'cursor':
-      createCursorStarterPack(baseDir, config.defaultAppCode, config.defaultArea);
+      createCursorStarterPack(baseDir, appCodeVal, areaVal);
       console.log(chalk.green('✓ Cursor starter pack installed'));
       console.log(chalk.gray('  Location: provenance/ai/cursor/'));
       break;
     case 'claude':
-      createClaudeStarterPack(baseDir, config.defaultAppCode, config.defaultArea);
+      createClaudeStarterPack(baseDir, appCodeVal, areaVal);
       console.log(chalk.green('✓ Claude Code starter pack installed'));
       console.log(chalk.gray('  Location: provenance/ai/claude/'));
       break;
     case 'antigravity':
-      createAntigravityStarterPack(baseDir, config.defaultAppCode, config.defaultArea);
+      createAntigravityStarterPack(baseDir, appCodeVal, areaVal);
       console.log(chalk.green('✓ Antigravity starter pack installed'));
       console.log(chalk.gray('  Location: provenance/ai/antigravity/'));
       break;

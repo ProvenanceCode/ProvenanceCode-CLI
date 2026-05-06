@@ -3,37 +3,54 @@ import * as path from 'path';
 import { ProvenanceConfig } from './types';
 
 /**
- * Get the next sequence number for a given area
+ * Resolve the project code from either DEO id_format or legacy defaultAppCode
  */
-export function getNextSequenceNumber(decisionsPath: string, appCode: string, area: string): string {
-  const prefix = `DEC-${appCode}-${area}-`;
+export function resolveProjectCode(config: ProvenanceConfig): string {
+  return config.id_format?.project ?? config.defaultAppCode ?? 'MYAPP';
+}
+
+/**
+ * Resolve the area/subproject code
+ */
+export function resolveAreaCode(config: ProvenanceConfig, override?: string): string {
+  return override ?? config.id_format?.subproject ?? config.defaultArea ?? 'CORE';
+}
+
+/**
+ * Get the next sequence number for a given project/area, reading both DEO v1 `id` and legacy `decision_id`
+ */
+export function getNextSequenceNumber(decisionsPath: string, projectCode: string, areaCode: string): string {
+  const prefix = `DEC-${projectCode}-${areaCode}-`;
   let maxSeq = 0;
 
   if (fs.existsSync(decisionsPath)) {
-    const files = fs.readdirSync(decisionsPath);
-    
-    files.forEach(file => {
-      if (file.endsWith('.json')) {
-        try {
-          const content = fs.readJsonSync(path.join(decisionsPath, file));
-          if (content.decision_id && content.decision_id.startsWith(prefix)) {
-            const seqPart = content.decision_id.split('-').pop();
-            if (seqPart) {
-              const seq = parseInt(seqPart, 10);
-              if (!isNaN(seq) && seq > maxSeq) {
-                maxSeq = seq;
-              }
-            }
+    const entries = fs.readdirSync(decisionsPath);
+
+    entries.forEach(entry => {
+      // Support both flat files and per-folder structure
+      const jsonPath = entry.endsWith('.json')
+        ? path.join(decisionsPath, entry)
+        : path.join(decisionsPath, entry, 'decision.json');
+
+      if (!fs.existsSync(jsonPath)) return;
+      try {
+        const content = fs.readJsonSync(jsonPath);
+        // Read DEO v1 `id` first, fall back to legacy `decision_id`
+        const id = content.id ?? content.decision_id;
+        if (id && id.startsWith(prefix)) {
+          const seqPart = id.split('-').pop();
+          const seq = parseInt(seqPart ?? '', 10);
+          if (!isNaN(seq) && seq > maxSeq) {
+            maxSeq = seq;
           }
-        } catch (e) {
-          // Skip invalid files
         }
+      } catch {
+        // Skip invalid files
       }
     });
   }
 
-  const nextSeq = maxSeq + 1;
-  return String(nextSeq).padStart(6, '0');
+  return String(maxSeq + 1).padStart(7, '0');
 }
 
 /**
@@ -45,7 +62,7 @@ export function getNextRiskSequenceNumber(risksPath: string, appCode: string, ar
 
   if (fs.existsSync(risksPath)) {
     const files = fs.readdirSync(risksPath);
-    
+
     files.forEach(file => {
       if (file.endsWith('.json')) {
         try {
@@ -59,7 +76,7 @@ export function getNextRiskSequenceNumber(risksPath: string, appCode: string, ar
               }
             }
           }
-        } catch (e) {
+        } catch {
           // Skip invalid files
         }
       }
@@ -71,10 +88,10 @@ export function getNextRiskSequenceNumber(risksPath: string, appCode: string, ar
 }
 
 /**
- * Generate a decision ID
+ * Generate a DEO v1 decision ID (7-digit hierarchical format)
  */
-export function generateDecisionId(appCode: string, area: string, sequence: string): string {
-  return `DEC-${appCode}-${area}-${sequence}`;
+export function generateDecisionId(projectCode: string, areaCode: string, sequence: string): string {
+  return `DEC-${projectCode}-${areaCode}-${sequence}`;
 }
 
 /**
@@ -89,14 +106,14 @@ export function generateRiskId(appCode: string, area: string, sequence: string):
  */
 export function loadConfig(baseDir: string): ProvenanceConfig | null {
   const configPath = path.join(baseDir, 'provenance', 'provenance.config.json');
-  
+
   if (!fs.existsSync(configPath)) {
     return null;
   }
 
   try {
     return fs.readJsonSync(configPath);
-  } catch (e) {
+  } catch {
     return null;
   }
 }
@@ -111,30 +128,50 @@ export function saveConfig(baseDir: string, config: ProvenanceConfig): void {
 }
 
 /**
- * Validate ID format (v2.0 standard)
+ * Validate DEO v1 decision ID format (both hierarchical and legacy)
+ * Hierarchical: DEC-{2-6}-[{2-6}-]{7digit}
+ * Legacy:       DEC-{6digit}
  */
 export function validateDecisionId(id: string): boolean {
-  return /^DEC-[A-Z0-9]{2,4}-[A-Z0-9]{2,4}-[0-9]{6}$/.test(id);
+  return /^(DEC-[A-Z0-9]{2,6}(-[A-Z0-9]{2,6})?-[0-9]{7}|DEC-[0-9]{6})$/.test(id);
 }
 
 /**
- * Validate risk ID format (v2.0 standard - uses RA prefix per standard)
+ * Validate risk ID format
  */
 export function validateRiskId(id: string): boolean {
   return /^RA-[A-Z0-9]{2,4}-[A-Z0-9]{2,4}-[0-9]{6}$/.test(id);
 }
 
 /**
- * Get all decision files in a directory
+ * Get all decision files in a directory (flat files and per-folder)
  */
 export function getDecisionFiles(decisionsPath: string): string[] {
   if (!fs.existsSync(decisionsPath)) {
     return [];
   }
 
-  return fs.readdirSync(decisionsPath)
-    .filter(file => file.endsWith('.json') && file !== 'TEMPLATE.json')
-    .map(file => path.join(decisionsPath, file));
+  const result: string[] = [];
+  const entries = fs.readdirSync(decisionsPath);
+
+  entries.forEach(entry => {
+    if (entry === 'TEMPLATE.json') return;
+
+    const fullPath = path.join(decisionsPath, entry);
+    const stat = fs.statSync(fullPath);
+
+    if (stat.isDirectory()) {
+      // Per-folder structure: DEC-PROJECT-AREA-0000001/decision.json
+      const nested = path.join(fullPath, 'decision.json');
+      if (fs.existsSync(nested)) {
+        result.push(nested);
+      }
+    } else if (entry.endsWith('.json')) {
+      result.push(fullPath);
+    }
+  });
+
+  return result;
 }
 
 /**
@@ -157,3 +194,14 @@ export function getCurrentTimestamp(): string {
   return new Date().toISOString();
 }
 
+/**
+ * Attempt to resolve the git author email from the repo config
+ */
+export function resolveGitAuthor(baseDir: string): string | null {
+  try {
+    const { execSync } = require('child_process');
+    return execSync('git config user.email', { cwd: baseDir }).toString().trim() || null;
+  } catch {
+    return null;
+  }
+}

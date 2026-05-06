@@ -132,3 +132,4 @@ prvc <command> --help          # Command-specific help
 
 **Remember:** Use `npx prvc <command>` or install globally with `npm install -g provenancecode-cli`
 
+

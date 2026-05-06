@@ -20,8 +20,8 @@ const program = new Command();
 
 program
   .name('prvc')
-  .description('ProvenanceCode CLI - Bootstrap and validate ProvenanceCode G2 (v2.0)')
-  .version('1.0.0');
+  .description('ProvenanceCode CLI - Generate and validate Decision Evidence Objects (DEO v1.0)')
+  .version('2.0.0');
 
 // Install command (NEW)
 program
@@ -40,14 +40,16 @@ program
 // Migrate command
 program
   .command('migrate')
-  .description('Migrate existing ProvenanceCode records from v1 to v2')
+  .description('Migrate existing ProvenanceCode records (v1→v2 or g2→DEO v1.0)')
   .option('--app-code <code>', 'Fallback project code for legacy IDs', 'PROJ')
   .option('--area <area>', 'Fallback subproject code for legacy IDs', 'CORE')
+  .option('--to-deo', 'Migrate g2/v2 records to DEO v1.0 format')
   .action((options) => {
     try {
       migrateCommand(process.cwd(), {
         appCode: options.appCode,
-        area: options.area
+        area: options.area,
+        toDeo: options.toDeo
       });
     } catch (error: any) {
       console.error(chalk.red('Error:'), error.message);
@@ -58,8 +60,8 @@ program
 // Init command
 program
   .command('init')
-  .description('Initialize ProvenanceCode G2 in your repository (full setup)')
-  .option('--standard <standard>', 'Standard version', 'g2')
+  .description('Initialize ProvenanceCode (DEO v1.0) in your repository')
+  .option('--standard <standard>', 'Standard version', 'deo')
   .option('--app-code <code>', 'Application code for ID generation', 'MYAPP')
   .option('--area <area>', 'Default area for records', 'CORE')
   .option('--ai <tools>', 'AI starter packs (comma-separated: cursor,claude,antigravity)', (value) => {
@@ -166,15 +168,23 @@ program
   .description('Quick decision capture and management')
   .argument('<action>', 'Action: add, search, export, list')
   .argument('[title]', 'Decision title (for add action)')
-  .option('--context <context>', 'Decision context')
-  .option('--decision <decision>', 'Decision made')
-  .option('--area <area>', 'Area code')
+  // DEO v1.0 flags
+  .option('--outcome <outcome>', 'Decision outcome — what was decided (DEO v1.0)')
+  .option('--rationale <rationale>', 'Why this decision was made (DEO v1.0)')
+  .option('--risk-level <level>', 'Risk level: low|medium|high|critical (DEO v1.0)', 'low')
+  .option('--bot <name>', 'AI bot name (e.g. cursor-ai, kiro, claude-code)')
+  .option('--author <author>', 'Author (defaults to git config user.email)')
+  // Legacy alias (kept for v2.0 compat)
+  .option('--decision <decision>', 'Alias for --outcome (deprecated, use --outcome)')
+  // Shared flags
+  .option('--context <context>', 'Problem context (stored as problem field)')
+  .option('--area <area>', 'Area/subproject code')
   .option('--auto-link', 'Auto-link to git context')
   .option('--query <query>', 'Search query')
   .option('--fuzzy', 'Fuzzy search')
   .option('--format <format>', 'Export format (markdown, json, csv)')
   .option('--output <file>', 'Output file')
-  .option('--status <status>', 'Filter by status')
+  .option('--status <status>', 'Filter by lifecycle state')
   .option('--recent <n>', 'Show N most recent', '10')
   .option('--limit <n>', 'Limit results', '10')
   .action((action, title, options) => {
