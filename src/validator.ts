@@ -3,11 +3,16 @@ import addFormats from 'ajv-formats';
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import { ValidationResult, ProvenanceConfig } from './types';
-import { getDecisionFiles, getRiskFiles, validateDecisionId, validateRiskId } from './utils';
+import { getDecisionFiles, getRiskFiles, getArtifactFiles, validateDecisionId, validateRiskId } from './utils';
 
 // Load schemas
 const decisionSchema = require('./schemas/decision.v1.schema.json');
 const riskSchema = require('./schemas/risk.g2.schema.json');
+const specSchema = require('./schemas/spec.schema.json');
+const mistakeSchema = require('./schemas/mistake.schema.json');
+const tapSchema = require('./schemas/tap.schema.json');
+const actSchema = require('./schemas/act.schema.json');
+const meoSchema = require('./schemas/meo.schema.json');
 
 // Outdated schema identifiers that must be rejected with an error
 const OUTDATED_SCHEMA_IDS = [
@@ -29,6 +34,11 @@ function createValidator(): Ajv {
 
   ajv.addSchema(decisionSchema, 'decision');
   ajv.addSchema(riskSchema, 'risk');
+  ajv.addSchema(specSchema, 'spec');
+  ajv.addSchema(mistakeSchema, 'mistake');
+  ajv.addSchema(tapSchema, 'tap');
+  ajv.addSchema(actSchema, 'act');
+  ajv.addSchema(meoSchema, 'meo');
 
   return ajv;
 }
@@ -158,32 +168,86 @@ function validateRiskFile(filePath: string, ajv: Ajv, result: ValidationResult):
 }
 
 /**
+ * Generic schema validator for simple artifacts (SPEC, MR, TAP, ACT, MEO)
+ */
+function validateGenericFile(
+  filePath: string,
+  schemaKey: string,
+  ajv: Ajv,
+  result: ValidationResult,
+  idField: string,
+  idPattern: RegExp
+): void {
+  try {
+    const data = fs.readJsonSync(filePath);
+    const valid = ajv.validate(schemaKey, data);
+
+    if (!valid && ajv.errors) {
+      ajv.errors.forEach(error => {
+        result.errors.push({
+          file: filePath,
+          message: `Schema validation failed: ${error.message}`,
+          details: error
+        });
+      });
+      result.valid = false;
+    }
+
+    const id: string | undefined = data[idField] ?? data.id;
+    if (id && !idPattern.test(id)) {
+      result.errors.push({ file: filePath, message: `Invalid ${idField} format: ${id}` });
+      result.valid = false;
+    }
+  } catch (error: any) {
+    result.errors.push({ file: filePath, message: `Failed to parse JSON: ${error.message}` });
+    result.valid = false;
+  }
+}
+
+/**
  * Validate all provenance records in a directory
  */
 export function validateProvenance(baseDir: string, config: ProvenanceConfig): ValidationResult {
-  const result: ValidationResult = {
-    valid: true,
-    errors: [],
-    warnings: []
-  };
-
+  const result: ValidationResult = { valid: true, errors: [], warnings: [] };
   const ajv = createValidator();
 
-  // Validate decision files
-  const decisionsPath = path.join(baseDir, config.paths.decisions);
-  const decisionFiles = getDecisionFiles(decisionsPath);
+  // Decisions
+  const decisionFiles = getDecisionFiles(path.join(baseDir, config.paths.decisions));
+  decisionFiles.forEach(file => validateDecisionFile(file, ajv, result));
 
-  decisionFiles.forEach(file => {
-    validateDecisionFile(file, ajv, result);
-  });
+  // Risks
+  const riskFiles = getRiskFiles(path.join(baseDir, config.paths.risks));
+  riskFiles.forEach(file => validateRiskFile(file, ajv, result));
 
-  // Validate risk files
-  const risksPath = path.join(baseDir, config.paths.risks);
-  const riskFiles = getRiskFiles(risksPath);
+  // Specs (v1.x)
+  const specsPath = path.join(baseDir, config.paths.specs ?? 'provenance/specs');
+  getArtifactFiles(specsPath, 'spec.json').forEach(file =>
+    validateGenericFile(file, 'spec', ajv, result, 'id', /^SPEC-/)
+  );
 
-  riskFiles.forEach(file => {
-    validateRiskFile(file, ajv, result);
-  });
+  // Mistakes (v1.x)
+  const mistakesPath = path.join(baseDir, config.paths.mistakes ?? 'provenance/mistakes');
+  getArtifactFiles(mistakesPath, 'mistake.json').forEach(file =>
+    validateGenericFile(file, 'mistake', ajv, result, 'mr_id', /^MR-/)
+  );
+
+  // TAP (v2.0 runtime)
+  const tasksPath = path.join(baseDir, config.paths.tasks ?? 'provenance/tasks');
+  getArtifactFiles(tasksPath, 'task.json').forEach(file =>
+    validateGenericFile(file, 'tap', ajv, result, 'id', /^TAP-/)
+  );
+
+  // ACT (v2.0 runtime)
+  const actionsPath = path.join(baseDir, config.paths.actions ?? 'provenance/actions');
+  getArtifactFiles(actionsPath, 'action.json').forEach(file =>
+    validateGenericFile(file, 'act', ajv, result, 'id', /^ACT-/)
+  );
+
+  // MEO (v2.0 runtime)
+  const memoriesPath = path.join(baseDir, config.paths.memories ?? 'provenance/memories');
+  getArtifactFiles(memoriesPath, 'memory.json').forEach(file =>
+    validateGenericFile(file, 'meo', ajv, result, 'id', /^MEO-/)
+  );
 
   return result;
 }

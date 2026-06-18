@@ -54,10 +54,12 @@ export function getNextSequenceNumber(decisionsPath: string, projectCode: string
 }
 
 /**
- * Get the next risk sequence number for a given area
+ * Get the next risk sequence number for a given area (RA- prefix)
  */
 export function getNextRiskSequenceNumber(risksPath: string, appCode: string, area: string): string {
-  const prefix = `RSK-${appCode}-${area}-`;
+  // Accept both RA- (canonical) and RSK- (legacy) prefixes when scanning
+  const canonPrefix = `RA-${appCode}-${area}-`;
+  const legacyPrefix = `RSK-${appCode}-${area}-`;
   let maxSeq = 0;
 
   if (fs.existsSync(risksPath)) {
@@ -67,8 +69,9 @@ export function getNextRiskSequenceNumber(risksPath: string, appCode: string, ar
       if (file.endsWith('.json')) {
         try {
           const content = fs.readJsonSync(path.join(risksPath, file));
-          if (content.risk_id && content.risk_id.startsWith(prefix)) {
-            const seqPart = content.risk_id.split('-').pop();
+          const riskId: string | undefined = content.ra_id ?? content.risk_id;
+          if (riskId && (riskId.startsWith(canonPrefix) || riskId.startsWith(legacyPrefix))) {
+            const seqPart = riskId.split('-').pop();
             if (seqPart) {
               const seq = parseInt(seqPart, 10);
               if (!isNaN(seq) && seq > maxSeq) {
@@ -95,10 +98,79 @@ export function generateDecisionId(projectCode: string, areaCode: string, sequen
 }
 
 /**
- * Generate a risk ID
+ * Generate a risk ID (canonical RA- prefix)
  */
 export function generateRiskId(appCode: string, area: string, sequence: string): string {
-  return `RSK-${appCode}-${area}-${sequence}`;
+  return `RA-${appCode}-${area}-${sequence}`;
+}
+
+/**
+ * Get the next simple 6-digit sequence number for any artifact type stored
+ * in per-folder structure (PREFIX-XXXXXX/artifact.json or flat *.json)
+ */
+export function getNextSimpleSequenceNumber(
+  dir: string,
+  prefix: string,
+  idField: string
+): string {
+  let maxSeq = 0;
+
+  if (!fs.existsSync(dir)) return '000001';
+
+  const entries = fs.readdirSync(dir);
+  entries.forEach(entry => {
+    if (entry === 'TEMPLATE.json') return;
+
+    const fullPath = path.join(dir, entry);
+    const stat = fs.statSync(fullPath);
+
+    let jsonPath: string | null = null;
+    if (stat.isDirectory()) {
+      // Try common artifact filenames
+      for (const name of ['task.json', 'action.json', 'memory.json', 'spec.json', 'mistake.json', 'risk.json', 'decision.json']) {
+        const candidate = path.join(fullPath, name);
+        if (fs.existsSync(candidate)) { jsonPath = candidate; break; }
+      }
+    } else if (entry.endsWith('.json')) {
+      jsonPath = fullPath;
+    }
+
+    if (!jsonPath) return;
+    try {
+      const content = fs.readJsonSync(jsonPath);
+      const id: string | undefined = content[idField] ?? content.id;
+      if (id && id.startsWith(prefix + '-')) {
+        const seqPart = id.split('-').pop();
+        const seq = parseInt(seqPart ?? '', 10);
+        if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
+      }
+    } catch { /* skip */ }
+  });
+
+  return String(maxSeq + 1).padStart(6, '0');
+}
+
+/**
+ * Get artifact files from a directory (per-folder structure only)
+ */
+export function getArtifactFiles(dir: string, filename: string): string[] {
+  if (!fs.existsSync(dir)) return [];
+
+  const result: string[] = [];
+  const entries = fs.readdirSync(dir);
+
+  entries.forEach(entry => {
+    if (entry === 'TEMPLATE.json') return;
+    const fullPath = path.join(dir, entry);
+    if (fs.statSync(fullPath).isDirectory()) {
+      const nested = path.join(fullPath, filename);
+      if (fs.existsSync(nested)) result.push(nested);
+    } else if (entry.endsWith('.json')) {
+      result.push(fullPath);
+    }
+  });
+
+  return result;
 }
 
 /**

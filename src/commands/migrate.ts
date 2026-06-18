@@ -3,13 +3,14 @@ import * as path from 'path';
 import chalk from 'chalk';
 import { ProvenanceConfig } from '../types';
 import { getDecisionTemplate, getRiskTemplate, getProvenanceReadme } from '../templates';
-import { loadConfig, saveConfig, getCurrentTimestamp } from '../utils';
+import { loadConfig, saveConfig, getCurrentTimestamp, getNextSimpleSequenceNumber } from '../utils';
 
 interface MigrationOptions {
   appCode?: string;
   area?: string;
   silent?: boolean;
   toDeo?: boolean;
+  toTap?: boolean;
 }
 
 interface MigrationResult {
@@ -38,6 +39,11 @@ const DEFAULT_SEQUENCES = {
 export function migrateCommand(baseDir: string, options: MigrationOptions = {}): void {
   if (options.toDeo) {
     migrateToDeo(baseDir, options);
+    return;
+  }
+
+  if (options.toTap) {
+    migrateToTap(baseDir);
     return;
   }
 
@@ -469,6 +475,127 @@ function normalizeRiskId(id: string, defaultAppCode: string, defaultArea: string
   }
 
   return id;
+}
+
+/**
+ * Migrate legacy task-provenance@2.0 records to TAP v1 format.
+ * Triggered by: prvc migrate --to-tap
+ */
+function migrateToTap(baseDir: string): void {
+  console.log(chalk.blue('🔄 Migrating task-provenance@2.0 records to TAP v1...'));
+  console.log();
+
+  const config = loadConfig(baseDir);
+  if (!config) {
+    console.log(chalk.red('❌ ProvenanceCode is not initialized. Run: prvc init'));
+    process.exit(1);
+  }
+
+  const legacyPaths = [
+    path.join(baseDir, 'provenance', 'tasks'),
+    path.join(baseDir, 'provenance', 'task-provenances'),
+    path.join(baseDir, '.provenancecode', 'tasks')
+  ];
+
+  const tasksDir = path.join(baseDir, config.paths.tasks ?? 'provenance/tasks');
+  fs.ensureDirSync(tasksDir);
+
+  let migratedCount = 0;
+  let skippedCount = 0;
+
+  // Determine the next safe sequence number BEFORE processing any files,
+  // so we never overwrite existing TAPs that were created with prvc tap new.
+  let nextSeqBase = parseInt(
+    getNextSimpleSequenceNumber(tasksDir, 'TAP', 'id'),
+    10
+  );
+
+  for (const legacyPath of legacyPaths) {
+    if (!fs.existsSync(legacyPath)) continue;
+
+    const files = fs.readdirSync(legacyPath)
+      .filter(f => f.endsWith('.json') && f !== 'TEMPLATE.json');
+
+    // Also skip files already renamed to .migrated
+    const activeFiles = files.filter(f => !f.endsWith('.migrated'));
+
+    activeFiles.forEach(file => {
+      const srcPath = path.join(legacyPath, file);
+      try {
+        const record = fs.readJsonSync(srcPath);
+
+        // Only migrate records that are task-provenance@2.0 or have no TAP schema
+        if (record.schema === 'provenancecode.tap.v1') {
+          skippedCount++;
+          return;
+        }
+
+        const seq = String(nextSeqBase + migratedCount).padStart(6, '0');
+        const tapId = record.id ?? `TAP-${seq}`;
+        const tapDir = path.join(tasksDir, tapId);
+        fs.ensureDirSync(tapDir);
+
+        const tap: any = {
+          schema: 'provenancecode.tap.v1',
+          id: tapId,
+          title: record.title ?? record.task_description ?? 'Migrated task',
+          version: 1,
+          lifecycle: { state: record.status ?? 'completed' },
+          timestamps: {
+            started_at: record.started_at ?? record.created_at ?? getCurrentTimestamp(),
+            ended_at: record.ended_at ?? record.completed_at ?? null,
+            attested_at: record.attested_at ?? null
+          },
+          runtime: {
+            agent: record.agent ?? record.bot ?? 'unknown',
+            model: record.model ?? 'unknown',
+            session_id: record.session_id ?? null
+          },
+          git: {
+            branch: record.branch ?? record.git?.branch ?? 'unknown',
+            commit_sha: record.commit_sha ?? record.git?.commit_sha ?? 'unknown',
+            repo: record.repo ?? record.git?.repo
+          },
+          actors: {
+            agent: record.agent ?? record.bot ?? 'unknown',
+            model: record.model ?? 'unknown',
+            human_reviewer: record.human_reviewer ?? null
+          },
+          task: {
+            outcome: record.outcome ?? record.result ?? 'succeeded',
+            description: record.task_description ?? record.title,
+            summary: record.summary
+          },
+          risk: {
+            needs_human_review: record.needs_human_review ?? false,
+            level: record.risk_level ?? 'low'
+          },
+          enforcement: { validated: false },
+          links: {
+            decisions: record.decisions ?? record.links?.decisions,
+            specs: record.specs ?? record.links?.specs
+          },
+          _migrated_from: record.schema ?? 'task-provenance@2.0'
+        };
+
+        fs.writeJsonSync(path.join(tapDir, 'task.json'), tap, { spaces: 2 });
+        // Rename source to prevent duplicate migration on subsequent runs
+        fs.renameSync(srcPath, srcPath + '.migrated');
+        migratedCount++;
+      } catch {
+        console.log(chalk.yellow(`  ⚠️  Skipped (parse error): ${file}`));
+      }
+    });
+  }
+
+  console.log(chalk.green('✅ TAP migration completed'));
+  console.log();
+  console.log(chalk.gray(`  Migrated: ${migratedCount} task record(s)`));
+  console.log(chalk.gray(`  Skipped (already TAP v1): ${skippedCount}`));
+  console.log();
+  console.log(chalk.bold('Next step:'));
+  console.log(chalk.cyan('  npx prvc validate'));
+  console.log();
 }
 
 

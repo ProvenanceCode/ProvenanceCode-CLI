@@ -15,13 +15,15 @@ import { installCommand } from './commands/install';
 import { migrateCommand } from './commands/migrate';
 import { configCommand } from './commands/config';
 import { starterpackCommand } from './commands/starterpack';
+import { specCommand, mistakeCommand } from './commands/artifact';
+import { tapCommand, actCommand, meoCommand } from './commands/runtime';
 
 const program = new Command();
 
 program
   .name('prvc')
-  .description('ProvenanceCode CLI - Generate and validate Decision Evidence Objects (DEO v1.0)')
-  .version('2.0.0');
+  .description('ProvenanceCode CLI — DEO v1.0, SPEC, MR, TAP, ACT, MEO provenance management')
+  .version('2.1.0');
 
 // Install command (NEW)
 program
@@ -40,16 +42,18 @@ program
 // Migrate command
 program
   .command('migrate')
-  .description('Migrate existing ProvenanceCode records (v1→v2 or g2→DEO v1.0)')
+  .description('Migrate existing ProvenanceCode records (v1→v2, g2→DEO v1.0, or task-provenance→TAP v1)')
   .option('--app-code <code>', 'Fallback project code for legacy IDs', 'PROJ')
   .option('--area <area>', 'Fallback subproject code for legacy IDs', 'CORE')
   .option('--to-deo', 'Migrate g2/v2 records to DEO v1.0 format')
+  .option('--to-tap', 'Migrate legacy task-provenance@2.0 records to TAP v1 format')
   .action((options) => {
     try {
       migrateCommand(process.cwd(), {
         appCode: options.appCode,
         area: options.area,
-        toDeo: options.toDeo
+        toDeo: options.toDeo,
+        toTap: options.toTap
       });
     } catch (error: any) {
       console.error(chalk.red('Error:'), error.message);
@@ -60,7 +64,7 @@ program
 // Init command
 program
   .command('init')
-  .description('Initialize ProvenanceCode (DEO v1.0) in your repository')
+  .description('Initialize ProvenanceCode in your repository')
   .option('--standard <standard>', 'Standard version', 'deo')
   .option('--app-code <code>', 'Application code for ID generation', 'MYAPP')
   .option('--area <area>', 'Default area for records', 'CORE')
@@ -69,6 +73,7 @@ program
   })
   .option('--ci <provider>', 'CI provider (github)')
   .option('--ci-mode <mode>', 'CI validation mode (warn|fail)', 'warn')
+  .option('--runtime', 'Enable v2.0 runtime governance (TAP/ACT/MEO directories)')
   .option('--force', 'Force reinitialize if already exists')
   .action((options) => {
     try {
@@ -79,6 +84,7 @@ program
         ai: options.ai,
         ci: options.ci,
         ciMode: options.ciMode,
+        runtime: options.runtime,
         force: options.force
       });
     } catch (error: any) {
@@ -327,6 +333,122 @@ program
   .action(() => {
     try {
       upgradeCommand();
+    } catch (error: any) {
+      console.error(chalk.red('Error:'), error.message);
+      process.exit(1);
+    }
+  });
+
+// ── v1.x artifact commands ────────────────────────────────────────────────────
+
+// Spec command
+program
+  .command('spec')
+  .description('Manage Specification Records (SPEC-*)')
+  .argument('<action>', 'Action: new, list, show')
+  .argument('[title-or-id]', 'Spec title (for new) or ID (for show)')
+  .option('--risk <level>', 'Risk level: low|medium|high|critical', 'medium')
+  .option('--status <status>', 'Filter by status (for list): draft|review|approved')
+  .option('--criteria <list>', 'Acceptance criteria (comma-separated)')
+  .option('--paths <list>', 'Affected paths (comma-separated)')
+  .option('--decisions <list>', 'Related decision IDs (comma-separated)')
+  .action((action, titleOrId, options) => {
+    try {
+      specCommand(process.cwd(), action, titleOrId, options);
+    } catch (error: any) {
+      console.error(chalk.red('Error:'), error.message);
+      process.exit(1);
+    }
+  });
+
+// Mistake command
+program
+  .command('mistake')
+  .description('Manage Mistake Records (MR-*)')
+  .argument('<action>', 'Action: new, list, show')
+  .argument('[title-or-id]', 'Mistake title (for new) or ID (for show)')
+  .option('--severity <level>', 'Severity: low|medium|high|critical', 'medium')
+  .option('--failure-type <type>', 'Failure type classification')
+  .option('--root-cause <text>', 'Root cause description')
+  .option('--trigger <text>', 'What triggered the mistake')
+  .option('--impact <text>', 'Impact description')
+  .option('--fix <text>', 'Fix description')
+  .option('--rule-id <id>', 'Prevention rule ID')
+  .option('--statement <text>', 'Prevention rule statement')
+  .option('--decisions <list>', 'Linked decision IDs (comma-separated)')
+  .action((action, titleOrId, options) => {
+    try {
+      mistakeCommand(process.cwd(), action, titleOrId, options);
+    } catch (error: any) {
+      console.error(chalk.red('Error:'), error.message);
+      process.exit(1);
+    }
+  });
+
+// ── v2.0 runtime governance commands ─────────────────────────────────────────
+
+// TAP command
+program
+  .command('tap')
+  .description('Manage Task Attestation/Provenance records (TAP-*)')
+  .argument('<action>', 'Action: new, list, show')
+  .argument('[title-or-id]', 'Task title (for new) or ID (for show)')
+  .option('--agent <name>', 'Agent name (defaults to git user.email)')
+  .option('--model <model>', 'LLM model used')
+  .option('--outcome <outcome>', 'Task outcome: succeeded|failed|blocked|partial', 'succeeded')
+  .option('--session <id>', 'Session ID')
+  .option('--risk <level>', 'Risk level: low|medium|high|critical')
+  .option('--human-review', 'Flag as requiring human review')
+  .option('--status <state>', 'Filter by lifecycle state (for list)')
+  .option('--recent <n>', 'Show N most recent (for list)', '10')
+  .action((action, titleOrId, options) => {
+    try {
+      tapCommand(process.cwd(), action, titleOrId, options);
+    } catch (error: any) {
+      console.error(chalk.red('Error:'), error.message);
+      process.exit(1);
+    }
+  });
+
+// ACT command
+program
+  .command('act')
+  .description('Manage Action Records (ACT-*)')
+  .argument('<action>', 'Action: new, list, show')
+  .argument('[title-or-id]', 'Action title (for new) or ID (for show)')
+  .option('--agent <name>', 'Agent name')
+  .option('--decision <verdict>', 'Policy decision: ALLOW|DENY|STEP_UP', 'ALLOW')
+  .option('--action-type <type>', 'Action type (e.g. tool_call, file_write)')
+  .option('--resource <resource>', 'Resource acted on')
+  .option('--task <tap-id>', 'Parent TAP ID')
+  .option('--status <state>', 'Filter by lifecycle state (for list)')
+  .option('--recent <n>', 'Show N most recent (for list)', '10')
+  .action((action, titleOrId, options) => {
+    try {
+      actCommand(process.cwd(), action, titleOrId, options);
+    } catch (error: any) {
+      console.error(chalk.red('Error:'), error.message);
+      process.exit(1);
+    }
+  });
+
+// MEO command
+program
+  .command('meo')
+  .description('Manage Memory Evidence Objects (MEO-*)')
+  .argument('<action>', 'Action: new, list, show')
+  .argument('[title-or-id]', 'Memory title (for new) or ID (for show)')
+  .option('--agent <name>', 'Agent name')
+  .option('--subtype <type>', 'Memory subtype: working|dream', 'working')
+  .option('--domain <domain>', 'Memory domain (e.g. auth, api-design)', 'general')
+  .option('--summary <text>', 'Memory summary')
+  .option('--confidence <level>', 'Confidence: high|medium|low|speculative', 'medium')
+  .option('--facts <list>', 'Key facts (comma-separated)')
+  .option('--task <tap-id>', 'TAP that wrote this memory')
+  .option('--status <state>', 'Filter by lifecycle state (for list)')
+  .action((action, titleOrId, options) => {
+    try {
+      meoCommand(process.cwd(), action, titleOrId, options);
     } catch (error: any) {
       console.error(chalk.red('Error:'), error.message);
       process.exit(1);

@@ -1,0 +1,323 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "provenancecode.act.v1",
+  "title": "ProvenanceCode Action Record (ACT v1.0)",
+  "description": "Schema for ACT records — a single governed tool call or action execution: policy decision, optional human approval, execution outcome, and governed change set. Runtime governance track, ProvenanceCode Standard v2.0.",
+  "type": "object",
+  "required": [
+    "schema",
+    "id",
+    "title",
+    "version",
+    "lifecycle",
+    "timestamps",
+    "actors",
+    "action",
+    "policy",
+    "approval",
+    "execution",
+    "links"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "provenancecode.act.v1"
+    },
+    "id": {
+      "type": "string",
+      "description": "ACT ID in simple (ACT-000101) or hierarchical (ACT-PROJ-SUB-000101) format",
+      "pattern": "^ACT-([A-Z0-9]{2,8}(-[A-Z0-9]{2,8})?-[0-9]{6}|[0-9]{6})$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "lifecycle": {
+      "type": "object",
+      "required": ["state"],
+      "additionalProperties": true,
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": [
+            "requested",
+            "denied",
+            "pending_approval",
+            "approved",
+            "rejected",
+            "executing",
+            "executed",
+            "cancelled",
+            "failed",
+            "superseded"
+          ]
+        },
+        "supersedes": {
+          "type": ["string", "null"]
+        },
+        "superseded_by": {
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "timestamps": {
+      "type": "object",
+      "required": ["requested_at", "decided_at"],
+      "additionalProperties": true,
+      "properties": {
+        "requested_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "decided_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "approved_at": {
+          "type": ["string", "null"],
+          "format": "date-time"
+        },
+        "executed_at": {
+          "type": ["string", "null"],
+          "format": "date-time"
+        },
+        "completed_at": {
+          "type": ["string", "null"],
+          "format": "date-time"
+        }
+      }
+    },
+    "actors": {
+      "type": "object",
+      "required": ["agent"],
+      "additionalProperties": true,
+      "properties": {
+        "agent": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model": {
+          "type": ["string", "null"]
+        },
+        "principal": {
+          "type": ["string", "null"],
+          "description": "Fully-qualified principal identity (e.g. agent:cursor@tenant_abc)"
+        },
+        "approver": {
+          "type": ["string", "null"]
+        },
+        "executor": {
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "action": {
+      "type": "object",
+      "required": ["type", "resource"],
+      "additionalProperties": true,
+      "properties": {
+        "type": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Dot-namespaced action type (e.g. file.write, shell.exec, deploy.service)"
+        },
+        "resource": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The primary resource target (file path, service name, etc.)"
+        },
+        "description": {
+          "type": "string"
+        },
+        "payload_summary": {
+          "type": "string"
+        },
+        "tool": {
+          "type": ["string", "null"],
+          "description": "The specific tool invoked (e.g. write_file, shell, browser)"
+        },
+        "tool_call_id": {
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "required": ["decision", "policy_hash"],
+      "additionalProperties": true,
+      "properties": {
+        "decision": {
+          "type": "string",
+          "enum": ["ALLOW", "DENY", "STEP_UP"]
+        },
+        "policy_bundle_id": {
+          "type": ["string", "null"]
+        },
+        "policy_hash": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Hash of the policy bundle evaluated (sha256:<hex>)"
+        },
+        "rule_matched": {
+          "type": ["string", "null"]
+        },
+        "obligations": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "rationale": {
+          "type": "string"
+        }
+      }
+    },
+    "approval": {
+      "type": "object",
+      "required": ["required", "status"],
+      "additionalProperties": true,
+      "properties": {
+        "required": {
+          "type": "boolean"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["not_required", "pending", "approved", "rejected"]
+        },
+        "approved_by": {
+          "type": ["string", "null"]
+        },
+        "approved_at": {
+          "type": ["string", "null"],
+          "format": "date-time"
+        },
+        "approved_artifact_id": {
+          "type": ["string", "null"]
+        },
+        "approved_content_hash": {
+          "type": ["string", "null"]
+        },
+        "approved_change_ids": {
+          "type": ["array", "null"],
+          "items": { "type": "string" }
+        },
+        "rejected_change_ids": {
+          "type": ["array", "null"],
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "execution": {
+      "type": "object",
+      "required": ["status"],
+      "additionalProperties": true,
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["not_executed", "succeeded", "failed", "partial"]
+        },
+        "executor": {
+          "type": ["string", "null"]
+        },
+        "result_summary": {
+          "type": ["string", "null"]
+        },
+        "error": {
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "change_set": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Present when a governed change set was applied",
+      "properties": {
+        "artifact_id": {
+          "type": "string"
+        },
+        "content_hash": {
+          "type": "string",
+          "description": "sha256 of canonical({ changes, environment, risk_level }) — verified by executor before execution"
+        },
+        "changes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["change_id", "type", "path"],
+            "properties": {
+              "change_id": { "type": "string" },
+              "type": {
+                "type": "string",
+                "enum": ["file_create", "file_modify", "file_delete", "dir_create", "dir_delete", "shell_command", "deploy"]
+              },
+              "path": { "type": "string" },
+              "description": { "type": "string" }
+            },
+            "additionalProperties": true
+          }
+        }
+      }
+    },
+    "risk": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "level": {
+          "type": "string",
+          "enum": ["low", "medium", "high", "critical"]
+        },
+        "description": {
+          "type": "string"
+        }
+      }
+    },
+    "links": {
+      "type": "object",
+      "required": ["task"],
+      "additionalProperties": true,
+      "properties": {
+        "task": {
+          "type": "string",
+          "pattern": "^TAP-",
+          "description": "The TAP that triggered this action"
+        },
+        "decisions": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^DEC-" }
+        },
+        "risks": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^RA-" }
+        },
+        "memory_context": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^MEO-" },
+          "description": "MEOs that provided context for this action"
+        },
+        "parent_action": {
+          "type": ["string", "null"]
+        },
+        "child_actions": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "integrity": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "signed": {
+          "type": "boolean"
+        },
+        "certificate": {
+          "type": ["string", "null"]
+        }
+      }
+    }
+  }
+}

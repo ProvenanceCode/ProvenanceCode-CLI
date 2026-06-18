@@ -1,0 +1,94 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ProvenanceCode Spec",
+  "type": "object",
+  "required": [
+    "id",
+    "repo",
+    "ref",
+    "title",
+    "status",
+    "risk",
+    "acceptanceCriteria",
+    "affectedPaths",
+    "relatedDecisions"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^SPEC-\\d{6}$"
+    },
+    "repo": {
+      "type": "object",
+      "required": [
+        "org",
+        "name"
+      ],
+      "properties": {
+        "org": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$"
+        },
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$"
+        }
+      },
+      "additionalProperties": true
+    },
+    "ref": {
+      "type": "string",
+      "pattern": "^pc:\\/\\/[a-z0-9-]+\\/[a-z0-9-]+\\/spec\\/SPEC-\\d{6}$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "review",
+        "approved"
+      ]
+    },
+    "risk": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ]
+    },
+    "acceptanceCriteria": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "affectedPaths": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "relatedDecisions": {
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "type": "string",
+            "pattern": "^DEC-\\d{6}$"
+          },
+          {
+            "type": "string",
+            "pattern": "^pc:\\/\\/[a-z0-9-]+\\/[a-z0-9-]+\\/decision\\/DEC-\\d{6}$"
+          }
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,301 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "provenancecode.meo.v1",
+  "title": "ProvenanceCode Memory Evidence Object (MEO v1.0)",
+  "description": "Schema for MEO records — the provenance of agent memory: what an agent learned, retained, synthesised, or forgot across sessions. Runtime governance track, ProvenanceCode Standard v2.0.",
+  "type": "object",
+  "required": [
+    "schema",
+    "id",
+    "title",
+    "version",
+    "subtype",
+    "lifecycle",
+    "timestamps",
+    "runtime",
+    "scope",
+    "content",
+    "provenance"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "provenancecode.meo.v1"
+    },
+    "id": {
+      "type": "string",
+      "description": "MEO ID in simple (MEO-000005) or hierarchical (MEO-PROJ-AGENT-000005) format",
+      "pattern": "^MEO-([A-Z0-9]{2,8}(-[A-Z0-9]{2,8})?-[0-9]{6}|[0-9]{6})$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "subtype": {
+      "type": "string",
+      "enum": ["working", "dream"],
+      "description": "working = active memory written during a task; dream = offline consolidation across multiple tasks"
+    },
+    "lifecycle": {
+      "type": "object",
+      "required": ["state"],
+      "additionalProperties": true,
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": ["forming", "active", "stale", "consolidated", "pruned", "superseded", "archived"]
+        },
+        "supersedes": {
+          "type": ["string", "null"]
+        },
+        "superseded_by": {
+          "type": ["string", "null"]
+        },
+        "expires_at": {
+          "type": ["string", "null"],
+          "format": "date-time"
+        }
+      }
+    },
+    "timestamps": {
+      "type": "object",
+      "required": ["created_at"],
+      "additionalProperties": true,
+      "properties": {
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "last_accessed_at": {
+          "type": ["string", "null"],
+          "format": "date-time"
+        },
+        "consolidated_at": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "Required for subtype: dream"
+        },
+        "expires_at": {
+          "type": ["string", "null"],
+          "format": "date-time"
+        }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "required": ["agent"],
+      "additionalProperties": true,
+      "properties": {
+        "agent": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model": {
+          "type": ["string", "null"]
+        },
+        "session_id": {
+          "type": ["string", "null"],
+          "description": "null for dream MEOs (no single session)"
+        },
+        "consolidation_trigger": {
+          "type": ["string", "null"],
+          "enum": ["scheduled", "explicit", "threshold", null],
+          "description": "Present for dream MEOs only"
+        }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "required": ["domain"],
+      "additionalProperties": true,
+      "properties": {
+        "domain": {
+          "type": "string",
+          "minLength": 1,
+          "description": "High-level domain this memory applies to (e.g. conductor-ui, policy-engine)"
+        },
+        "repo": {
+          "type": ["string", "null"]
+        },
+        "paths": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "content": {
+      "type": "object",
+      "required": ["summary", "confidence"],
+      "additionalProperties": true,
+      "properties": {
+        "summary": {
+          "type": "string",
+          "minLength": 1
+        },
+        "key_facts": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Structured, terse statements of retained knowledge — injected into agent context at session start"
+        },
+        "open_questions": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "confidence": {
+          "type": "string",
+          "enum": ["high", "medium", "low", "speculative"]
+        },
+        "distilled_from_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of source tasks/memories distilled (dream MEOs only)"
+        },
+        "patterns_identified": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "contradictions_resolved": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "memories_pruned": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^MEO-" }
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "required": ["source", "source_quality"],
+      "additionalProperties": true,
+      "properties": {
+        "source": {
+          "type": "string",
+          "enum": ["task", "dream", "manual"],
+          "description": "How this memory was produced"
+        },
+        "source_quality": {
+          "type": "string",
+          "enum": ["human-reviewed", "agent-observed", "agent-synthesised", "human-authored"]
+        }
+      }
+    },
+    "consolidation": {
+      "type": "object",
+      "description": "Required for subtype: dream",
+      "required": ["inputs", "synthesis_method"],
+      "additionalProperties": true,
+      "properties": {
+        "trigger": {
+          "type": "string",
+          "enum": ["scheduled", "explicit", "threshold"]
+        },
+        "inputs": {
+          "type": "object",
+          "required": ["tasks"],
+          "additionalProperties": true,
+          "properties": {
+            "tasks": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "type": "string", "pattern": "^TAP-" }
+            },
+            "memories_read": {
+              "type": "array",
+              "items": { "type": "string", "pattern": "^MEO-" }
+            },
+            "decisions_reviewed": {
+              "type": "array",
+              "items": { "type": "string", "pattern": "^DEC-" }
+            },
+            "risks_reviewed": {
+              "type": "array",
+              "items": { "type": "string", "pattern": "^RA-" }
+            }
+          }
+        },
+        "synthesis_method": {
+          "type": "string",
+          "enum": ["agent-reflection", "structured-summarisation", "llm-distillation"]
+        },
+        "pruned_memory_ids": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^MEO-" }
+        },
+        "pruned_reason": {
+          "type": "string"
+        }
+      }
+    },
+    "links": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "written_by_task": {
+          "type": ["string", "null"],
+          "description": "Required for subtype: working"
+        },
+        "read_by_tasks": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^TAP-" }
+        },
+        "supersedes": {
+          "type": ["string", "null"]
+        },
+        "consolidated_into": {
+          "type": ["string", "null"],
+          "description": "Required when lifecycle.state is pruned"
+        },
+        "decisions": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^DEC-" }
+        },
+        "risks": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^RA-" }
+        },
+        "actions": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^ACT-" }
+        }
+      }
+    },
+    "integrity": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "content_hash": {
+          "type": ["string", "null"],
+          "description": "sha256 of canonical(content) — enables tamper detection"
+        },
+        "signed": {
+          "type": "boolean"
+        },
+        "certificate": {
+          "type": ["string", "null"]
+        }
+      }
+    }
+  },
+  "if": {
+    "properties": { "subtype": { "const": "dream" } }
+  },
+  "then": {
+    "required": ["consolidation"],
+    "properties": {
+      "timestamps": {
+        "required": ["created_at", "consolidated_at"]
+      }
+    }
+  }
+}

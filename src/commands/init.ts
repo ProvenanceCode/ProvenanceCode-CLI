@@ -30,9 +30,12 @@ export function initCommand(baseDir: string, options: InitOptions): void {
   console.log(chalk.blue('🚀 Initializing ProvenanceCode (DEO v1.0)...'));
   console.log();
 
+  const enableRuntime = options.runtime ?? false;
   const provenanceDir = path.join(baseDir, 'provenance');
   const decisionsDir = path.join(provenanceDir, 'decisions');
   const risksDir = path.join(provenanceDir, 'risks');
+  const specsDir = path.join(provenanceDir, 'specs');
+  const mistakesDir = path.join(provenanceDir, 'mistakes');
   const schemasDir = path.join(provenanceDir, 'schemas');
   const configPath = path.join(provenanceDir, 'provenance.config.json');
 
@@ -42,12 +45,29 @@ export function initCommand(baseDir: string, options: InitOptions): void {
     console.log(chalk.gray('   Running v1 -> v2 migration and folder repair...'));
     console.log();
     migrateToV2(baseDir, { appCode, area, silent: true });
+    // Repair new dirs if missing
+    fs.ensureDirSync(specsDir);
+    fs.ensureDirSync(mistakesDir);
+    if (enableRuntime) {
+      fs.ensureDirSync(path.join(provenanceDir, 'tasks'));
+      fs.ensureDirSync(path.join(provenanceDir, 'actions'));
+      fs.ensureDirSync(path.join(provenanceDir, 'memories'));
+    }
   } else {
     // Create directory structure
     console.log(chalk.gray('📁 Creating directory structure...'));
     fs.ensureDirSync(decisionsDir);
     fs.ensureDirSync(risksDir);
+    fs.ensureDirSync(specsDir);
+    fs.ensureDirSync(mistakesDir);
     fs.ensureDirSync(schemasDir);
+
+    if (enableRuntime) {
+      fs.ensureDirSync(path.join(provenanceDir, 'tasks'));
+      fs.ensureDirSync(path.join(provenanceDir, 'actions'));
+      fs.ensureDirSync(path.join(provenanceDir, 'memories'));
+      console.log(chalk.gray('   + tasks/, actions/, memories/ (v2.0 runtime governance)'));
+    }
 
     // Copy schemas
     console.log(chalk.gray('📄 Installing schemas...'));
@@ -71,11 +91,19 @@ export function initCommand(baseDir: string, options: InitOptions): void {
         root: 'provenance',
         decisions: 'provenance/decisions',
         risks: 'provenance/risks',
-        schemas: 'provenance/schemas'
+        specs: 'provenance/specs',
+        mistakes: 'provenance/mistakes',
+        schemas: 'provenance/schemas',
+        ...(enableRuntime ? {
+          tasks: 'provenance/tasks',
+          actions: 'provenance/actions',
+          memories: 'provenance/memories'
+        } : {})
       },
       validation: {
         mode: ciMode ?? 'warn'
-      }
+      },
+      ...(enableRuntime ? { runtime: { enabled: true } } : {})
     };
     
     saveConfig(baseDir, config);
@@ -126,12 +154,18 @@ export function initCommand(baseDir: string, options: InitOptions): void {
 
   // Success message
   console.log();
-  console.log(chalk.green('✨ ProvenanceCode (DEO v1.0) initialized successfully!'));
+  console.log(chalk.green('✨ ProvenanceCode initialized successfully!'));
   console.log();
   console.log(chalk.bold('Next steps:'));
   console.log(chalk.gray('  1. Review configuration:'), chalk.cyan('cat provenance/provenance.config.json'));
   console.log(chalk.gray('  2. Record your first decision:'), chalk.cyan(`prvc journal add "My first decision" --outcome="What we decided" --rationale="Why we decided it"`));
-  console.log(chalk.gray('  3. Validate records:'), chalk.cyan('npx prvc validate'));
+  if (enableRuntime) {
+    console.log(chalk.gray('  3. Record a task:'), chalk.cyan('prvc tap new "My first agent task" --agent=cursor-ai'));
+    console.log(chalk.gray('  4. Validate records:'), chalk.cyan('npx prvc validate'));
+  } else {
+    console.log(chalk.gray('  3. Validate records:'), chalk.cyan('npx prvc validate'));
+    console.log(chalk.gray('  4. Add runtime governance (v2.0):'), chalk.cyan('prvc init --runtime --force'));
+  }
   console.log();
   console.log(chalk.gray('📖 Documentation: https://provenancecode.org'));
   console.log();

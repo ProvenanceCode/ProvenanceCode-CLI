@@ -1,15 +1,15 @@
 {
   "name": "provenancecode-cli",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "author": "KDDLC AI Solutions SL & Kieran Desmond <kieran.desmond@embankai.com>",
-  "description": "ProvenanceCode CLI - Generate and validate Decision Evidence Objects (DEO v1.0)",
+  "description": "ProvenanceCode CLI — DEO v1.0, SPEC, MR, TAP, ACT, MEO provenance management",
   "main": "dist/index.js",
   "bin": {
     "prvc": "dist/index.js"
   },
   "scripts": {
     "build": "tsc && npm run copy-schemas",
-    "copy-schemas": "mkdir -p dist/schemas && cp src/schemas/decision.v1.schema.json dist/schemas/ && cp src/schemas/risk.g2.schema.json dist/schemas/",
+    "copy-schemas": "mkdir -p dist/schemas && cp src/schemas/*.json dist/schemas/",
     "dev": "tsc --watch",
     "prepublishOnly": "npm run build",
     "test": "echo \"Error: no test specified\" && exit 1",
