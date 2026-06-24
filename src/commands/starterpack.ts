@@ -178,69 +178,108 @@ function installAntigravityPack(baseDir: string, config: any): void {
 }
 
 /**
- * Generate Cursor rules content
+ * Generate Cursor rules content — ProvenanceCode Standard v2.0
  */
 function generateCursorRules(config: any): string {
-  return `# ProvenanceCode G2 Rules for Cursor
+  const project: string = config.id_format?.project ?? config.defaultAppCode ?? 'MYAPP';
+  const subproject: string = config.id_format?.subproject ?? config.defaultArea ?? 'CORE';
+  const decisionsPath: string = config.paths?.decisions ?? 'provenance/decisions';
+  const tasksPath: string = config.paths?.tasks ?? 'provenance/tasks';
+  const actionsPath: string = config.paths?.actions ?? 'provenance/actions';
+  const memoriesPath: string = config.paths?.memories ?? 'provenance/memories';
+
+  return `# ProvenanceCode Artifact Rules for Cursor
 
 ## Overview
 
-This project uses ProvenanceCode G2 (v2.0) for decision and risk tracking.
+This project uses the **ProvenanceCode Standard v2.0** with two artifact tracks:
+
+| Track | Version | Artifacts |
+|---|---|---|
+| Repo Governance | v1.x | DEO (decisions), RA (risks) |
+| Runtime Governance | v2.0 | TAP (tasks), ACT (actions), MEO (memories) |
 
 **Configuration:**
-- App Code: ${config.defaultAppCode}
-- Default Area: ${config.defaultArea}
-- ID Format: ${config.idScheme}
-- Risk ID Format: ${config.riskIdScheme}
+- Standard: ProvenanceCode v2.0
+- ID Style: hierarchical
+- Project: ${project}
+- Default Subproject: ${subproject}
+- Decision ID Format: \`DEC-${project}-${subproject}-{SEQ7}\` (7-digit zero-padded)
+- Risk ID Format: \`RA-{PROJECT}-{SUBPROJECT}-{SEQ6}\`
+- TAP ID Format: \`TAP-{SEQ6}\` (simple) or \`TAP-{PROJECT}-{SUBPROJECT}-{SEQ6}\` (hierarchical)
+- ACT ID Format: \`ACT-{SEQ6}\` or \`ACT-{PROJECT}-{SUBPROJECT}-{SEQ6}\`
+- MEO ID Format: \`MEO-{SEQ6}\` or \`MEO-{PROJECT}-{AGENT}-{SEQ6}\`
 
 ## Decision Record Creation
 
 When creating ProvenanceCode decision records:
 
-### 1. Use G2 Schema
-All decisions must reference: \`https://provenancecode.org/schemas/decision.g2.schema.json\`
+### 1. Schema Identifier
+
+All decisions MUST use: \`"schema": "provenancecode.decision.v1"\`
 
 ### 2. ID Format
-\`${config.idScheme.replace('{APP}', config.defaultAppCode).replace('{AREA}', config.defaultArea)}\`
 
-Auto-increment the sequence number by checking existing files in \`${config.paths.decisions}\`
+New decisions: \`DEC-${project}-${subproject}-{SEQ7}\` — auto-increment by checking existing files in \`${decisionsPath}/\`.
+
+The folder name MUST match the \`id\` field (e.g. \`${decisionsPath}/DEC-${project}-${subproject}-0000001/decision.json\`).
 
 ### 3. Required Fields
-- \`schema\`: G2 schema URL
-- \`decision_id\`: Properly formatted ID
-- \`title\`: Brief, descriptive title
-- \`status\`: Default to "draft"
-- \`context\`: Why this decision is needed
-- \`decision\`: What was decided
 
-### 4. Status Values
-\`draft\` | \`proposed\` | \`accepted\` | \`rejected\` | \`deprecated\` | \`superseded\`
+| Field | Description |
+|---|---|
+| \`schema\` | \`"provenancecode.decision.v1"\` |
+| \`id\` | Properly formatted decision ID |
+| \`title\` | Brief, descriptive title (max 120 chars) |
+| \`version\` | Integer, starts at 1 |
+| \`lifecycle.state\` | One of: \`draft\`, \`proposed\`, \`accepted\`, \`rejected\`, \`superseded\` |
+| \`timestamps.created_at\` | ISO 8601 timestamp |
+| \`actors.author\` | Author username or identifier |
+| \`outcome\` | What was decided |
+| \`rationale\` | Why this was chosen |
+| \`risk.level\` | One of: \`low\`, \`medium\`, \`high\`, \`critical\` |
 
-### 5. Best Practices
-- ✅ Link PRs and issues in the \`links\` array
-- ✅ Document consequences (positive and negative)
-- ✅ Assess risks
+### 4. Lifecycle States
+
+\`draft\` → \`proposed\` → \`accepted\` → \`superseded\`
+
+\`draft\` → \`proposed\` → \`rejected\` (terminal)
+
+\`accepted\` decisions MUST NOT be edited — create a new decision and mark old as \`superseded\`.
+
+### 5. AI Attribution
+
+Use \`actors.bot\` for AI-assisted drafts:
+- \`"cursor-ai"\` for Cursor
+- \`"kiro"\` for Kiro
+- \`"claude-code"\` for Claude Code
+
+### 6. Best Practices
+
+- ✅ Link PRs and issues in \`links.pr\` and \`links.issues\`
+- ✅ List alternatives in \`options\`
+- ✅ Describe why in \`rationale\`
+- ✅ Set \`actors.bot\` when AI drafted the decision
 - ✅ Keep records atomic and focused
 - ✅ Use the CLI: \`npx prvc journal add "Title"\`
 
 ## Risk Record Creation
 
-When creating risk records:
+### 1. ID Format
 
-### 1. Use G2 Schema
-\`https://provenancecode.org/schemas/risk.g2.schema.json\`
+\`RA-{PROJECT}-{SUBPROJECT}-{SEQ6}\`
 
-### 2. ID Format
-\`${config.riskIdScheme.replace('{APP}', config.defaultAppCode).replace('{AREA}', config.defaultArea)}\`
+### 2. Severity Levels
 
-### 3. Severity Levels
 \`low\` | \`medium\` | \`high\` | \`critical\`
 
-### 4. Status Values
+### 3. Status Values
+
 \`open\` | \`monitoring\` | \`mitigated\` | \`accepted\` | \`closed\`
 
-### 5. Link Decisions
-Use \`linked_decisions\` array to reference related decision IDs
+### 4. Link Decisions
+
+Reference related decision IDs in \`links.decisions\`.
 
 ## CLI Commands
 
@@ -261,7 +300,7 @@ npx prvc quality
 npx prvc search "keyword"
 
 # Show decision
-npx prvc show DEC-${config.defaultAppCode}-${config.defaultArea}-000001
+npx prvc show DEC-${project}-${subproject}-0000001
 \`\`\`
 
 ## Important Notes
@@ -270,75 +309,205 @@ npx prvc show DEC-${config.defaultAppCode}-${config.defaultArea}-000001
 - ⚠️ Do NOT block PRs based on decision status
 - ✅ DO validate JSON schema compliance
 - ✅ DO encourage linking related records
-- ✅ DO default to "draft" status for new records
+- ✅ DO default to \`"draft"\` for new records
 
-## Templates Available
-
-Use \`npx prvc template list\` to see all templates:
-- architecture
-- security
-- tech-debt
-- api
-- database
-- tooling
-- performance
-
-## Example Decision
+## Minimal Valid DEO Example
 
 \`\`\`json
 {
-  "schema": "https://provenancecode.org/schemas/decision.g2.schema.json",
-  "decision_id": "DEC-${config.defaultAppCode}-${config.defaultArea}-000001",
+  "schema": "provenancecode.decision.v1",
+  "id": "DEC-${project}-${subproject}-0000001",
   "title": "Use PostgreSQL for main database",
-  "status": "draft",
-  "context": "Need reliable ACID-compliant database",
-  "decision": "We will use PostgreSQL as our primary database",
-  "consequences": "Strong consistency, mature tooling, but need careful schema migrations",
-  "risk": "Potential scaling challenges at very high volumes",
-  "links": []
+  "version": 1,
+  "lifecycle": {
+    "state": "draft"
+  },
+  "timestamps": {
+    "created_at": "2026-06-24T09:00:00Z"
+  },
+  "actors": {
+    "author": "your-username"
+  },
+  "outcome": "Use PostgreSQL as our primary database.",
+  "rationale": "Strong ACID compliance, mature tooling, and team familiarity.",
+  "risk": {
+    "level": "low"
+  }
 }
 \`\`\`
 
 ---
 
-**ProvenanceCode CLI** - Making decision documentation effortless
+## TAP — Task Attestation/Provenance
+
+### When to create a TAP
+
+Create a TAP **at the start of every agent task** that touches code, configuration, or infrastructure. The TAP lifecycle: \`in_progress\` → \`completed\` / \`blocked\` / \`failed\`.
+
+### File location
+
+\`\`\`
+${tasksPath}/TAP-XXXXXX/
+  task.json          (REQUIRED)
+  task.md            (RECOMMENDED)
+  attestation.json   (OPTIONAL — for signed tasks)
+  /evidence/         (OPTIONAL)
+\`\`\`
+
+### Required fields
+
+| Field | Description |
+|---|---|
+| \`schema\` | \`"provenancecode.tap.v1"\` |
+| \`id\` | TAP ID matching folder name |
+| \`title\` | Task title from the prompt |
+| \`version\` | Integer, starts at 1 |
+| \`lifecycle.state\` | \`in_progress\` at start; update at end |
+| \`timestamps.started_at\` | ISO 8601 when task began |
+| \`runtime.agent\` | \`"cursor"\` |
+| \`runtime.model\` | Active model (e.g. \`"claude-sonnet-4-5"\`) |
+| \`git.branch\` | Active git branch |
+| \`task.outcome\` | \`succeeded\` / \`failed\` / \`blocked\` / \`partial\` |
+| \`risk.needs_human_review\` | \`true\` if any high/critical risks open |
+| \`enforcement.validated\` | \`true\` after validation passes |
+
+### CLI commands
+
+\`\`\`bash
+# Start a new task
+npx prvc tap new "Task title"
+
+# Close a task (transition to completed/failed)
+npx prvc tap done TAP-000001
+
+# List recent tasks
+npx prvc tap list --recent 10
+
+# Validate all TAPs
+npx prvc validate --track runtime
+\`\`\`
+
+---
+
+## ACT — Action Record
+
+### When to create an ACT
+
+Create an ACT for **every governed tool call** that goes through PDP evaluation. High-sensitivity actions (file writes, shell exec, deploys) MUST have one. The ACT links back to its parent TAP via \`links.task\`.
+
+### File location
+
+\`\`\`
+${actionsPath}/ACT-XXXXXX/
+  action.json              (REQUIRED)
+  action.md                (RECOMMENDED for STEP_UP)
+  change-set.json          (REQUIRED if governed change set applied)
+  approval.receipt.json    (REQUIRED if STEP_UP approved)
+  /evidence/               (OPTIONAL)
+\`\`\`
+
+### Policy decisions
+
+| Decision | Meaning |
+|---|---|
+| \`ALLOW\` | Proceeds to execution |
+| \`DENY\` | Blocked; \`execution.status = not_executed\` |
+| \`STEP_UP\` | Requires human approval first |
+
+### CLI commands
+
+\`\`\`bash
+# Record a new governed action
+npx prvc act new "Action description" --action-type file.write --resource path/to/file.ts --task TAP-000001
+
+# Record a shell execution
+npx prvc act new "Run git commit" --action-type shell.exec --resource "git commit" --task TAP-000001
+\`\`\`
+
+---
+
+## MEO — Memory Evidence Object
+
+### When to create a MEO
+
+Create a **working** MEO at the end of any TAP where the agent learned something significant. Create a **dream** MEO during offline consolidation events (synthesising across multiple TAPs).
+
+### File location
+
+\`\`\`
+${memoriesPath}/MEO-XXXXXX/
+  memory.json          (REQUIRED)
+  memory.md            (RECOMMENDED)
+  consolidation.json   (REQUIRED for dream subtype)
+  /evidence/           (OPTIONAL)
+\`\`\`
+
+### Lifecycle states
+
+\`forming\` → \`active\` → \`stale\` → \`consolidated\` / \`pruned\` → \`archived\`
+
+### CLI commands
+
+\`\`\`bash
+# Record new working memory after a task
+npx prvc meo new "What was learned" --domain api-design --task TAP-000001
+
+# Create a dream consolidation
+npx prvc meo new "Consolidated auth patterns" --subtype dream --task TAP-000001,TAP-000002,TAP-000003
+\`\`\`
+
+---
+
+**ProvenanceCode Standard v2.0** — Repo Governance (DEO/RA) + Runtime Governance (TAP/ACT/MEO)
 `;
 }
 
 /**
- * Generate Claude rules content
+ * Generate Claude rules content — ProvenanceCode Standard v2.0
  */
 function generateClaudeRules(config: any): string {
-  return `# ProvenanceCode G2 - Claude Code Assistant
+  const project: string = config.id_format?.project ?? config.defaultAppCode ?? 'MYAPP';
+  const subproject: string = config.id_format?.subproject ?? config.defaultArea ?? 'CORE';
+
+  return `# ProvenanceCode Standard v2.0 — Claude Code Assistant
 
 ## Configuration
-- **App Code:** ${config.defaultAppCode}
-- **Default Area:** ${config.defaultArea}
-- **Decision Format:** ${config.idScheme}
-- **Risk Format:** ${config.riskIdScheme}
+- **Project:** ${project}
+- **Subproject:** ${subproject}
+- **Decision Format:** \`DEC-${project}-${subproject}-{SEQ7}\`
+- **Risk Format:** \`RA-${project}-${subproject}-{SEQ6}\`
+
+## Artifact tracks
+
+| Track | Artifacts |
+|---|---|
+| Repo Governance | DEO (decisions), RA (risks), SPEC, MR |
+| Runtime Governance | TAP (tasks), ACT (actions), MEO (memories) |
 
 ## Your Role
 
-When asked to create decisions or risks:
+When asked to create ProvenanceCode records:
 
-1. ✅ Generate valid G2-compliant JSON
-2. ✅ Auto-increment sequence numbers
-3. ✅ Set "draft" as default status
-4. ✅ Include all required fields
-5. ✅ Suggest linking related PRs/issues
-6. ❌ Do NOT enforce approval workflows
-7. ❌ Do NOT manage governance
+1. ✅ Use \`"schema": "provenancecode.decision.v1"\` for decisions (NOT the G2 URL)
+2. ✅ Auto-increment sequence numbers by checking existing folders
+3. ✅ Set \`"draft"\` as default \`lifecycle.state\` for new decisions
+4. ✅ Include all required fields (see \`.cursor/rules/provenancecode.md\`)
+5. ✅ Set \`actors.bot\` when AI drafted a decision
+6. ✅ Link TAPs → ACTs → MEOs for runtime governance
+7. ❌ Do NOT enforce approval workflows
+8. ❌ Do NOT block on policy decisions — that is handled server-side
 
 ## Quick Commands
 
 \`\`\`bash
 npx prvc journal add "Decision title"
-npx prvc template use architecture
+npx prvc tap new "Task title"
+npx prvc tap done TAP-000001
+npx prvc act new "Action" --task TAP-000001
+npx prvc meo new "Memory" --task TAP-000001
 npx prvc validate
 npx prvc quality
 \`\`\`
-
-See \`.cursor/rules/provenancecode.md\` for full documentation.
 `;
 }
 
@@ -452,83 +621,96 @@ esac
  */
 function generateSessionStartScript(): string {
   return `#!/usr/bin/env bash
-# ProvenanceCode Session Start
-# Checks API health and auto-registers the Cursor agent on session start.
-# Installed by: prvc starterpack add cursor
+# ProvenanceCode session start hook
+# Checks the API is reachable and registers the Cursor agent if needed.
+# Fails open — a non-responsive API should never block Cursor from opening.
 
-API_URL="\${PROVENANCECODE_API_URL:-http://127.0.0.1:3001/v1}"
-API_KEY="\${PROVENANCECODE_PAT:-}"
-TENANT_ID="\${PROVENANCECODE_TENANT_ID:-tenant-dev}"
-AGENT_ID="\${PROVENANCECODE_AGENT_ID:-agent-cursor}"
-DASHBOARD_URL="\${PROVENANCECODE_DASHBOARD_URL:-http://127.0.0.1:3002}"
+set -euo pipefail
 
-health="\$(curl -s -m 3 "\${API_URL}/health" 2>/dev/null)" || true
+PRVC_API="\${PROVENANCECODE_API_URL:-http://127.0.0.1:3001/v1}"
+PRVC_KEY="\${PROVENANCECODE_PAT:-dev-key}"
+PRVC_TENANT="\${PROVENANCECODE_TENANT_ID:-tenant-dev}"
+PRVC_AGENT="\${PROVENANCECODE_AGENT_ID:-agent-cursor}"
 
-if [[ -z "\$health" ]]; then
-  cat <<'EOF'
-additional_context: |
-  ProvenanceCode API is not reachable. Governance hooks are inactive.
-  Start the API and restart Cursor to enable enforcement.
-EOF
+# ── Check API health ─────────────────────────────────────────────────────────
+
+health=\$(curl -sf --max-time 3 "\${PRVC_API}/health" 2>/dev/null) || {
+  echo '{"additional_context":"ProvenanceCode API is not reachable. Shell governance and MCP tools will fail open until the API is available."}'
   exit 0
+}
+
+# ── Ensure this agent is registered ─────────────────────────────────────────
+
+reg=\$(curl -sf --max-time 3 \\
+  "\${PRVC_API}/agents/\${PRVC_TENANT}/\${PRVC_AGENT}" \\
+  -H "x-api-key: \${PRVC_KEY}" 2>/dev/null) || reg=""
+
+if [[ -z "\$reg" || "\$(echo "\$reg" | jq -r '.agentId // empty' 2>/dev/null)" == "" ]]; then
+  curl -sf --max-time 5 \\
+    -X POST "\${PRVC_API}/agents" \\
+    -H "x-api-key: \${PRVC_KEY}" \\
+    -H "Content-Type: application/json" \\
+    -d "{
+      \\"agentId\\": \\"\${PRVC_AGENT}\\",
+      \\"tenantId\\": \\"\${PRVC_TENANT}\\",
+      \\"name\\": \\"Cursor Agent (\${PRVC_AGENT})\\",
+      \\"status\\": \\"active\\",
+      \\"capabilities\\": [\\"aws.cli.run\\", \\"infra.*\\", \\"project.*\\", \\"deploy.*\\", \\"file.*\\", \\"k8s.*\\", \\"terraform.*\\", \\"helm.*\\", \\"gcloud.*\\"]
+    }" > /dev/null 2>&1 || true
 fi
 
-# Auto-register agent if not yet registered
-reg="\$(curl -s -m 5 -X POST "\${API_URL}/agents" \\
-  -H "Content-Type: application/json" \\
-  -H "x-api-key: \${API_KEY}" \\
-  -d "{\\"tenantId\\":\\"\${TENANT_ID}\\",\\"agentId\\":\\"\${AGENT_ID}\\",
-       \\"name\\":\\"Cursor Agent\\",\\"type\\":\\"cursor\\",
-       \\"capabilities\\":[\\"aws.*\\",\\"infra.*\\",\\"project.*\\",\\"deploy.*\\",\\"file.*\\"]}" 2>/dev/null)" || true
+api_status=\$(echo "\$health" | jq -r '.status // "unknown"' 2>/dev/null || echo "unknown")
 
-cat <<EOF
-additional_context: |
-  ProvenanceCode governance is ACTIVE.
-  - API: \${API_URL}
-  - Agent: \${AGENT_ID} (tenant: \${TENANT_ID})
-  - Dashboard: \${DASHBOARD_URL}
-  - Governed commands: aws, kubectl, terraform, helm, gcloud
-  All matching shell commands will be policy-checked before execution.
-EOF
+echo "{\\"additional_context\\":\\"ProvenanceCode API: \${api_status}. Agent '\${PRVC_AGENT}' registered. Shell governance active for: aws, kubectl, terraform, helm, gcloud. MCP tools available via .cursor/mcp.json.\\"}"
+exit 0
 `;
 }
 
 /**
- * Generate Antigravity rules content
+ * Generate Antigravity rules content — ProvenanceCode Standard v2.0
  */
 function generateAntigravityRules(config: any): string {
-  return `# ProvenanceCode G2 - Antigravity Integration
+  const project: string = config.id_format?.project ?? config.defaultAppCode ?? 'MYAPP';
+  const subproject: string = config.id_format?.subproject ?? config.defaultArea ?? 'CORE';
+
+  return `# ProvenanceCode Standard v2.0 — Antigravity Integration
 
 ## Quick Reference
 
-- **Decision ID:** ${config.idScheme}
-- **Risk ID:** ${config.riskIdScheme}
-- **App Code:** ${config.defaultAppCode}
-- **Default Area:** ${config.defaultArea}
+- **Decision ID:** \`DEC-${project}-${subproject}-{SEQ7}\`
+- **Risk ID:** \`RA-${project}-${subproject}-{SEQ6}\`
+- **Task ID:** \`TAP-{SEQ6}\`
+- **Action ID:** \`ACT-{SEQ6}\`
+- **Memory ID:** \`MEO-{SEQ6}\`
 
-## Schemas
+## Schema identifiers
 
-- Decision: https://provenancecode.org/schemas/decision.g2.schema.json
-- Risk: https://provenancecode.org/schemas/risk.g2.schema.json
+- Decision: \`provenancecode.decision.v1\`
+- TAP: \`provenancecode.tap.v1\`
+- ACT: \`provenancecode.act.v1\`
+- MEO: \`provenancecode.meo.v1\`
 
-## Status Values
+## Lifecycle States
 
-**Decisions:** draft, proposed, accepted, rejected, deprecated, superseded
-**Risks:** open, monitoring, mitigated, accepted, closed
+**Decisions:** \`draft\` → \`proposed\` → \`accepted\` → \`superseded\`
+**Risks:** \`open\` | \`monitoring\` | \`mitigated\` | \`accepted\` | \`closed\`
+**TAPs:** \`in_progress\` → \`completed\` | \`blocked\` | \`failed\`
+**MEOs:** \`forming\` → \`active\` → \`stale\` → \`consolidated\` / \`pruned\`
 
 ## CLI Commands
 
 \`\`\`bash
 npx prvc journal add "Title"
-npx prvc template list
+npx prvc tap new "Task title"
+npx prvc tap done TAP-000001
 npx prvc validate
 npx prvc quality
 \`\`\`
 
 ## Boundary
 
-This is the OPEN layer - record creation and validation only.
-Governance enforcement is handled by the ProvenanceCode GitHub App.
+This is the OPEN layer — record creation and validation only.
+Governance enforcement is handled by the ProvenanceCode API and GitHub App.
 `;
 }
 

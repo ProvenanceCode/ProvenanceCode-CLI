@@ -7,7 +7,7 @@
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import chalk from 'chalk';
-import { loadConfig, getCurrentTimestamp, resolveGitAuthor, getNextSimpleSequenceNumber, getArtifactFiles } from '../utils';
+import { loadConfig, getCurrentTimestamp, resolveGitAuthor, getNextSimpleSequenceNumber, getArtifactFiles, safePath } from '../utils';
 import { TapRecord, ActRecord, MeoRecord } from '../types';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -69,6 +69,10 @@ export function tapCommand(
     case 'new':
       tapNew(baseDir, dir, titleOrId, options);
       break;
+    case 'done':
+    case 'close':
+      tapDone(dir, titleOrId, options);
+      break;
     case 'list':
       tapList(dir, options.status, parseInt(options.recent ?? '10', 10));
       break;
@@ -77,7 +81,7 @@ export function tapCommand(
       break;
     default:
       console.error(chalk.red(`Unknown action: ${action}`));
-      console.log(chalk.gray('Usage: prvc tap <new|list|show> [title-or-id] [options]'));
+      console.log(chalk.gray('Usage: prvc tap <new|done|list|show> [title-or-id] [options]'));
       process.exit(1);
   }
 }
@@ -136,6 +140,76 @@ function tapNew(
   console.log(chalk.gray(`  Agent: ${agent} | Outcome: ${tap.task.outcome}`));
 }
 
+function tapDone(
+  dir: string,
+  id: string | undefined,
+  options: { outcome?: string; humanReview?: boolean }
+): void {
+  if (!id) {
+    console.error(chalk.red('❌ TAP ID is required: prvc tap done TAP-000001'));
+    process.exit(1);
+  }
+
+  let file: string;
+  try {
+    file = safePath(dir, id, 'task.json');
+  } catch {
+    console.error(chalk.red(`❌ Invalid TAP ID: "${id}"`));
+    process.exit(1);
+  }
+  if (!fs.existsSync(file)) {
+    console.error(chalk.red(`❌ Not found: ${id}`));
+    process.exit(1);
+  }
+
+  let tap: TapRecord;
+  try {
+    tap = fs.readJsonSync(file);
+  } catch {
+    console.error(chalk.red(`❌ Could not parse ${id}: file may be corrupted`));
+    process.exit(1);
+  }
+
+  if (tap.lifecycle.state === 'completed' || tap.lifecycle.state === 'failed') {
+    console.log(chalk.yellow(`⚠️  TAP ${id} is already in state: ${tap.lifecycle.state}`));
+    return;
+  }
+
+  const outcome = (options.outcome as TapRecord['task']['outcome']) ?? 'succeeded';
+  const now = getCurrentTimestamp();
+
+  const updated: TapRecord = {
+    ...tap,
+    lifecycle: {
+      ...tap.lifecycle,
+      state: outcome === 'failed' ? 'failed' : outcome === 'blocked' ? 'blocked' : 'completed'
+    },
+    timestamps: {
+      ...tap.timestamps,
+      ended_at: now,
+      attested_at: now
+    },
+    task: {
+      ...tap.task,
+      outcome
+    },
+    risk: {
+      ...tap.risk,
+      needs_human_review: options.humanReview ?? tap.risk.needs_human_review
+    },
+    enforcement: {
+      ...tap.enforcement,
+      validated: true
+    }
+  };
+
+  fs.writeJsonSync(file, updated, { spaces: 2 });
+
+  const stateColor = outcome === 'succeeded' ? chalk.green : outcome === 'failed' ? chalk.red : chalk.yellow;
+  console.log(stateColor(`✓ TAP closed: ${id} → ${updated.lifecycle.state}`));
+  console.log(chalk.gray(`  Outcome: ${outcome} | Attested: ${now}`));
+}
+
 function tapList(dir: string, statusFilter: string | undefined, limit: number): void {
   const files = getArtifactFiles(dir, 'task.json');
   if (files.length === 0) { console.log(chalk.gray('No TAP records found.')); return; }
@@ -156,9 +230,19 @@ function tapList(dir: string, statusFilter: string | undefined, limit: number): 
 
 function tapShow(dir: string, id: string | undefined): void {
   if (!id) { console.error(chalk.red('❌ ID required')); process.exit(1); }
-  const file = path.join(dir, id, 'task.json');
+  let file: string;
+  try {
+    file = safePath(dir, id, 'task.json');
+  } catch {
+    console.error(chalk.red(`❌ Invalid TAP ID: "${id}"`));
+    process.exit(1);
+  }
   if (!fs.existsSync(file)) { console.error(chalk.red(`❌ Not found: ${id}`)); process.exit(1); }
-  const r: TapRecord = fs.readJsonSync(file);
+  let r: TapRecord;
+  try { r = fs.readJsonSync(file); } catch {
+    console.error(chalk.red(`❌ Could not parse ${id}: file may be corrupted`));
+    process.exit(1);
+  }
   console.log(chalk.bold(`\n${r.id} — ${r.title}`));
   console.log(`State: ${r.lifecycle.state} | Outcome: ${r.task.outcome}`);
   console.log(`Agent: ${r.runtime.agent} | Model: ${r.runtime.model}`);
@@ -277,9 +361,19 @@ function actList(dir: string, statusFilter: string | undefined, limit: number): 
 
 function actShow(dir: string, id: string | undefined): void {
   if (!id) { console.error(chalk.red('❌ ID required')); process.exit(1); }
-  const file = path.join(dir, id, 'action.json');
+  let file: string;
+  try {
+    file = safePath(dir, id, 'action.json');
+  } catch {
+    console.error(chalk.red(`❌ Invalid ACT ID: "${id}"`));
+    process.exit(1);
+  }
   if (!fs.existsSync(file)) { console.error(chalk.red(`❌ Not found: ${id}`)); process.exit(1); }
-  const r: ActRecord = fs.readJsonSync(file);
+  let r: ActRecord;
+  try { r = fs.readJsonSync(file); } catch {
+    console.error(chalk.red(`❌ Could not parse ${id}: file may be corrupted`));
+    process.exit(1);
+  }
   console.log(chalk.bold(`\n${r.id} — ${r.title}`));
   console.log(`Decision: ${r.policy.decision} | State: ${r.lifecycle.state}`);
   console.log(`Agent: ${r.actors.agent}`);
@@ -416,9 +510,19 @@ function meoList(dir: string, statusFilter?: string): void {
 
 function meoShow(dir: string, id: string | undefined): void {
   if (!id) { console.error(chalk.red('❌ ID required')); process.exit(1); }
-  const file = path.join(dir, id, 'memory.json');
+  let file: string;
+  try {
+    file = safePath(dir, id, 'memory.json');
+  } catch {
+    console.error(chalk.red(`❌ Invalid MEO ID: "${id}"`));
+    process.exit(1);
+  }
   if (!fs.existsSync(file)) { console.error(chalk.red(`❌ Not found: ${id}`)); process.exit(1); }
-  const r: MeoRecord = fs.readJsonSync(file);
+  let r: MeoRecord;
+  try { r = fs.readJsonSync(file); } catch {
+    console.error(chalk.red(`❌ Could not parse ${id}: file may be corrupted`));
+    process.exit(1);
+  }
   console.log(chalk.bold(`\n${r.id} — ${r.title}`));
   console.log(`Subtype: ${r.subtype} | State: ${r.lifecycle.state} | Confidence: ${r.content.confidence}`);
   console.log(`Agent: ${r.runtime.agent} | Domain: ${r.scope.domain}`);

@@ -63,14 +63,20 @@ export function exportCommand(baseDir: string, options: any = {}): void {
       process.exit(1);
   }
 
-  const outputPath = output || defaultFilename;
+  const rawPath = output || defaultFilename;
+  const outputPath = path.resolve(rawPath);
+  const forbidden = ['/etc', '/sys', '/proc', '/boot', '/dev', '/root', '/bin', '/sbin', '/usr/bin', '/usr/sbin'];
+  if (forbidden.some(p => outputPath === p || outputPath.startsWith(p + path.sep))) {
+    console.error(chalk.red(`❌ Output path not allowed: ${outputPath}`));
+    process.exit(1);
+  }
   fs.writeFileSync(outputPath, content);
 
   console.log(chalk.green(`✓ Exported ${decisions.length} decision(s) and ${risks.length} risk(s)`));
-  console.log(chalk.gray(`  File: ${path.resolve(outputPath)}`));
+  console.log(chalk.gray(`  File: ${outputPath}`));
   
   if (format === 'html') {
-    console.log(chalk.gray(`  Open: file://${path.resolve(outputPath)}`));
+    console.log(chalk.gray(`  Open: file://${outputPath}`));
   }
 }
 

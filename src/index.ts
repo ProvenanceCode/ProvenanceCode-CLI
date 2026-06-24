@@ -17,13 +17,14 @@ import { configCommand } from './commands/config';
 import { starterpackCommand } from './commands/starterpack';
 import { specCommand, mistakeCommand } from './commands/artifact';
 import { tapCommand, actCommand, meoCommand } from './commands/runtime';
+import { validateCode } from './utils';
 
 const program = new Command();
 
 program
   .name('prvc')
   .description('ProvenanceCode CLI — DEO v1.0, SPEC, MR, TAP, ACT, MEO provenance management')
-  .version('2.1.0');
+  .version('2.2.0');
 
 // Install command (NEW)
 program
@@ -49,6 +50,8 @@ program
   .option('--to-tap', 'Migrate legacy task-provenance@2.0 records to TAP v1 format')
   .action((options) => {
     try {
+      if (options.appCode) validateCode(options.appCode, '--app-code');
+      if (options.area)    validateCode(options.area, '--area');
       migrateCommand(process.cwd(), {
         appCode: options.appCode,
         area: options.area,
@@ -77,6 +80,8 @@ program
   .option('--force', 'Force reinitialize if already exists')
   .action((options) => {
     try {
+      if (options.appCode) validateCode(options.appCode, '--app-code');
+      if (options.area)    validateCode(options.area, '--area');
       initCommand(process.cwd(), {
         standard: options.standard,
         appCode: options.appCode,
@@ -109,6 +114,8 @@ program
   .option('--remove-root <root>', 'Remove a monorepo root')
   .action((action, options) => {
     try {
+      if (options.appCode) validateCode(options.appCode, '--app-code');
+      if (options.area)    validateCode(options.area, '--area');
       configCommand(process.cwd(), action || 'list', options);
     } catch (error: any) {
       console.error(chalk.red('Error:'), error.message);
@@ -136,10 +143,12 @@ program
   .command('validate')
   .description('Validate ProvenanceCode records')
   .option('--mode <mode>', 'Validation mode (warn|fail)')
+  .option('--track <track>', 'Track to validate: repo|runtime|all', 'all')
   .action((options) => {
     try {
       validateCommand(process.cwd(), {
-        mode: options.mode
+        mode: options.mode,
+        track: options.track
       });
     } catch (error: any) {
       console.error(chalk.red('Error:'), error.message);
@@ -195,6 +204,7 @@ program
   .option('--limit <n>', 'Limit results', '10')
   .action((action, title, options) => {
     try {
+      if (options.area) validateCode(options.area, '--area');
       journalCommand(process.cwd(), action, { ...options, title });
     } catch (error: any) {
       console.error(chalk.red('Error:'), error.message);
@@ -230,6 +240,7 @@ program
   .option('--area <area>', 'Area code')
   .action((action, name, options) => {
     try {
+      if (options.area) validateCode(options.area, '--area');
       templateCommand(process.cwd(), action, name, options);
     } catch (error: any) {
       console.error(chalk.red('Error:'), error.message);
@@ -391,8 +402,8 @@ program
 program
   .command('tap')
   .description('Manage Task Attestation/Provenance records (TAP-*)')
-  .argument('<action>', 'Action: new, list, show')
-  .argument('[title-or-id]', 'Task title (for new) or ID (for show)')
+  .argument('<action>', 'Action: new, done, list, show')
+  .argument('[title-or-id]', 'Task title (for new) or ID (for done/show)')
   .option('--agent <name>', 'Agent name (defaults to git user.email)')
   .option('--model <model>', 'LLM model used')
   .option('--outcome <outcome>', 'Task outcome: succeeded|failed|blocked|partial', 'succeeded')

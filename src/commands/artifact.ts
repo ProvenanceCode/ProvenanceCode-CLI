@@ -6,7 +6,7 @@
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import chalk from 'chalk';
-import { loadConfig, getCurrentTimestamp, getNextSimpleSequenceNumber, getArtifactFiles } from '../utils';
+import { loadConfig, getCurrentTimestamp, getNextSimpleSequenceNumber, getArtifactFiles, safePath } from '../utils';
 import { SpecRecord, MistakeRecord } from '../types';
 
 function resolveGitRepo(baseDir: string): { org: string; name: string } {
@@ -137,9 +137,19 @@ function specList(dir: string, statusFilter?: string): void {
 
 function specShow(dir: string, id: string | undefined): void {
   if (!id) { console.error(chalk.red('❌ ID required')); process.exit(1); }
-  const file = path.join(dir, id, 'spec.json');
+  let file: string;
+  try {
+    file = safePath(dir, id, 'spec.json');
+  } catch {
+    console.error(chalk.red(`❌ Invalid SPEC ID: "${id}"`));
+    process.exit(1);
+  }
   if (!fs.existsSync(file)) { console.error(chalk.red(`❌ Not found: ${id}`)); process.exit(1); }
-  const spec: SpecRecord = fs.readJsonSync(file);
+  let spec: SpecRecord;
+  try { spec = fs.readJsonSync(file); } catch {
+    console.error(chalk.red(`❌ Could not parse ${id}: file may be corrupted`));
+    process.exit(1);
+  }
   console.log(chalk.bold(`\n${spec.id} — ${spec.title}`));
   console.log(`Status: ${spec.status} | Risk: ${spec.risk}`);
   if (spec.acceptanceCriteria?.length) {
@@ -264,9 +274,19 @@ function mistakeList(dir: string): void {
 
 function mistakeShow(dir: string, id: string | undefined): void {
   if (!id) { console.error(chalk.red('❌ ID required')); process.exit(1); }
-  const file = path.join(dir, id, 'mistake.json');
+  let file: string;
+  try {
+    file = safePath(dir, id, 'mistake.json');
+  } catch {
+    console.error(chalk.red(`❌ Invalid MR ID: "${id}"`));
+    process.exit(1);
+  }
   if (!fs.existsSync(file)) { console.error(chalk.red(`❌ Not found: ${id}`)); process.exit(1); }
-  const r: MistakeRecord = fs.readJsonSync(file);
+  let r: MistakeRecord;
+  try { r = fs.readJsonSync(file); } catch {
+    console.error(chalk.red(`❌ Could not parse ${id}: file may be corrupted`));
+    process.exit(1);
+  }
   console.log(chalk.bold(`\n${r.mr_id} — ${r.title}`));
   console.log(`Status: ${r.status} | Severity: ${r.severity} | Type: ${r.failure_type}`);
   if (r.trigger) console.log(`\nTrigger: ${r.trigger}`);

@@ -1,0 +1,18 @@
+{
+  "schema": "provenancecode.risk.v2",
+  "risk_id": "RA-PRVC-SEC-000003",
+  "title": "Uncaught JSON parse errors in show/done commands expose raw stack traces",
+  "description": "The tapShow, tapDone, actShow, meoShow, specShow, and mistakeShow command handlers called fs.readJsonSync() without try/catch. A malformed or adversarially crafted artifact JSON file (e.g. truncated file, embedded null bytes, deeply nested structure) would cause an unhandled SyntaxError or TypeError to surface as a raw Node.js stack trace, potentially revealing internal file paths, dependency versions, and call stack structure to an attacker who can observe CLI output.",
+  "severity": "medium",
+  "status": "mitigated",
+  "probability": "low",
+  "impact": "Information disclosure of internal call stack. In adversarial scenarios (shared CI logs, piped output), stack traces can reveal internal module paths and dependency versions useful for crafting further attacks.",
+  "mitigation": "All 6 affected show/done handlers wrapped in try/catch. On parse failure, a user-friendly error message is shown and the process exits with code 1. No stack trace is exposed. Mitigated in v2.2.0.",
+  "owner": "kierandesmond",
+  "tags": ["input-validation", "npm"],
+  "linked_decisions": [],
+  "timestamps": {
+    "created_at": "2026-06-24T10:56:00Z",
+    "updated_at": "2026-06-24T10:56:00Z"
+  }
+}

@@ -1,17 +1,26 @@
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import chalk from 'chalk';
-import { loadConfig } from '../utils';
+import { loadConfig, getArtifactFiles, getDecisionFiles, getRiskFiles } from '../utils';
 import { validateProvenance } from '../validator';
+
+type Track = 'repo' | 'runtime' | 'all';
+
+function countFolderArtifacts(dir: string): number {
+  if (!fs.existsSync(dir)) return 0;
+  return fs.readdirSync(dir).filter(name => {
+    const full = path.join(dir, name);
+    return fs.statSync(full).isDirectory();
+  }).length;
+}
 
 /**
  * Validate ProvenanceCode records
  */
-export function validateCommand(baseDir: string, options: { mode?: string } = {}): void {
+export function validateCommand(baseDir: string, options: { mode?: string; track?: string } = {}): void {
   console.log(chalk.blue('🔍 Validating ProvenanceCode records...'));
   console.log();
 
-  // Load config
   const config = loadConfig(baseDir);
   
   if (!config) {
@@ -20,24 +29,41 @@ export function validateCommand(baseDir: string, options: { mode?: string } = {}
     process.exit(1);
   }
 
-  // Override validation mode if specified
   const validationMode = options.mode || config.validation.mode;
+  const track: Track = (options.track as Track) ?? 'all';
 
-  // Run validation
   const result = validateProvenance(baseDir, config);
 
-  // Display results
+  // ── Artifact counts ───────────────────────────────────────────────────────
   const decisionsPath = path.join(baseDir, config.paths.decisions);
   const risksPath = path.join(baseDir, config.paths.risks);
-  
-  const decisionCount = fs.existsSync(decisionsPath) 
-    ? fs.readdirSync(decisionsPath).filter(f => f.endsWith('.json') && f !== 'TEMPLATE.json').length 
-    : 0;
-  const riskCount = fs.existsSync(risksPath) 
-    ? fs.readdirSync(risksPath).filter(f => f.endsWith('.json') && f !== 'TEMPLATE.json').length 
-    : 0;
+  const specsPath = path.join(baseDir, config.paths.specs ?? 'provenance/specs');
+  const mistakesPath = path.join(baseDir, config.paths.mistakes ?? 'provenance/mistakes');
+  const tasksPath = path.join(baseDir, config.paths.tasks ?? 'provenance/tasks');
+  const actionsPath = path.join(baseDir, config.paths.actions ?? 'provenance/actions');
+  const memoriesPath = path.join(baseDir, config.paths.memories ?? 'provenance/memories');
 
-  console.log(chalk.gray(`Validated ${decisionCount} decision(s) and ${riskCount} risk(s)`));
+  const decCount = getDecisionFiles(decisionsPath).length;
+  const rskCount = getRiskFiles(risksPath).length;
+  const spcCount = getArtifactFiles(specsPath, 'spec.json').length;
+  const mrCount  = getArtifactFiles(mistakesPath, 'mistake.json').length;
+  const tapCount = getArtifactFiles(tasksPath, 'task.json').length;
+  const actCount = getArtifactFiles(actionsPath, 'action.json').length;
+  const meoCount = getArtifactFiles(memoriesPath, 'memory.json').length;
+
+  if (track === 'repo' || track === 'all') {
+    console.log(chalk.bold('Repo Governance (v1.x)'));
+    console.log(chalk.gray(`  DEO decisions : ${decCount}`));
+    console.log(chalk.gray(`  RA risks       : ${rskCount}`));
+    console.log(chalk.gray(`  SPEC records   : ${spcCount}`));
+    console.log(chalk.gray(`  MR mistakes    : ${mrCount}`));
+  }
+  if (track === 'runtime' || track === 'all') {
+    console.log(chalk.bold('Runtime Governance (v2.0)'));
+    console.log(chalk.gray(`  TAP tasks      : ${tapCount}`));
+    console.log(chalk.gray(`  ACT actions    : ${actCount}`));
+    console.log(chalk.gray(`  MEO memories   : ${meoCount}`));
+  }
   console.log();
 
   // Display errors

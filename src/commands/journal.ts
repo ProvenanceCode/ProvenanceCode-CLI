@@ -233,8 +233,15 @@ function exportJournal(baseDir: string, config: any, options: any): void {
   }
 
   if (output) {
-    fs.writeFileSync(output, exportContent);
-    console.log(chalk.green(`✓ Exported to ${output}`));
+    const resolved = path.resolve(output);
+    // Reject writes to system directories — export is intended for user workspaces
+    const forbidden = ['/etc', '/sys', '/proc', '/boot', '/dev', '/root', '/bin', '/sbin', '/usr/bin', '/usr/sbin'];
+    if (forbidden.some(p => resolved === p || resolved.startsWith(p + path.sep))) {
+      console.error(chalk.red(`❌ Output path not allowed: ${resolved}`));
+      process.exit(1);
+    }
+    fs.writeFileSync(resolved, exportContent);
+    console.log(chalk.green(`✓ Exported to ${resolved}`));
   } else {
     console.log(exportContent);
   }

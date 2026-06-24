@@ -3,6 +3,32 @@ import * as path from 'path';
 import { ProvenanceConfig } from './types';
 
 /**
+ * Validates app-code / area / project codes against a safe character allowlist.
+ * Prevents path-traversal characters from flowing into directory names.
+ * Allowlist: A-Z, 0-9, underscore, hyphen — max 16 characters.
+ */
+export function validateCode(value: string, label: string): void {
+  if (!/^[A-Z0-9_-]{1,16}$/i.test(value)) {
+    throw new Error(
+      `Invalid ${label} "${value}": must contain only A-Z, 0-9, _ or - and be at most 16 characters`
+    );
+  }
+}
+
+/**
+ * Resolves a path and asserts it remains under the given root directory.
+ * Throws on any path that escapes the root via `..` or absolute segments.
+ */
+export function safePath(root: string, ...parts: string[]): string {
+  const rootResolved = path.resolve(root);
+  const resolved = path.resolve(root, ...parts);
+  if (resolved !== rootResolved && !resolved.startsWith(rootResolved + path.sep)) {
+    throw new Error(`Path traversal detected: "${resolved}" is outside root "${rootResolved}"`);
+  }
+  return resolved;
+}
+
+/**
  * Resolve the project code from either DEO id_format or legacy defaultAppCode
  */
 export function resolveProjectCode(config: ProvenanceConfig): string {

@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "command": ".cursor/hooks/prvc-session-start.sh",
+        "timeout": 10
+      }
+    ],
+    "taskStart": [
+      {
+        "command": ".cursor/hooks/prvc-task-start.sh",
+        "failClosed": false,
+        "timeout": 10
+      }
+    ],
+    "taskEnd": [
+      {
+        "command": ".cursor/hooks/prvc-task-end.sh",
+        "failClosed": false,
+        "timeout": 15
+      }
+    ],
+    "beforeShellExecution": [
+      {
+        "command": ".cursor/hooks/prvc-shell-guard.sh",
+        "matcher": "^\\s*(aws|kubectl|terraform|helm|gcloud)\\s",
+        "failClosed": false,
+        "timeout": 35
+      }
+    ]
+  }
+}

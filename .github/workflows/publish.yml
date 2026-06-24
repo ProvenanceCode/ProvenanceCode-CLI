@@ -1,0 +1,62 @@
+name: Publish to npm
+
+on:
+  release:
+    types: [published]
+
+# Minimal permissions — only id-token write is needed for OIDC trusted publishing.
+# OWASP NPM Security #11: Use trusted publishers (OIDC) instead of long-lived tokens.
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    name: Build, audit, and publish
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── Checkout ────────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── Node.js setup ───────────────────────────────────────────────────────
+      # registry-url enables OIDC token exchange with npm registry
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      # ── Install from lockfile (OWASP #2) ───────────────────────────────────
+      # npm ci is deterministic and fails on lockfile inconsistency
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      # ── Security audit (OWASP #5) ──────────────────────────────────────────
+      - name: Audit dependencies
+        run: npm audit --audit-level=high
+
+      # ── Build ────────────────────────────────────────────────────────────────
+      - name: Build
+        run: npm run build
+
+      # ── Verify published file list (OWASP #1) ──────────────────────────────
+      # Dry-run publish to confirm only dist/, README.md, LICENSE are included.
+      - name: Verify package contents
+        run: |
+          npm pack --dry-run 2>&1 | tee /tmp/pack-preview.txt
+          # Fail if any source file leaks into the tarball
+          if grep -E '^\s+(src/|tsconfig|\.npmrc|\.env|\.cursor)' /tmp/pack-preview.txt; then
+            echo "ERROR: Source files detected in publish tarball — aborting"
+            exit 1
+          fi
+
+      # ── Publish with OIDC provenance (OWASP #11) ───────────────────────────
+      # --provenance attaches a cryptographically-signed attestation (Sigstore)
+      # linking the package to this exact GitHub Actions run.
+      # No NPM_TOKEN secret required — OIDC handles authentication.
+      - name: Publish to npm
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

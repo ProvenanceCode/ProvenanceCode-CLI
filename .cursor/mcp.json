@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "provenancecode": {
+      "command": "node",
+      "args": ["packages/mcp-server/dist/bin/mcp-server.js"],
+      "env": {
+        "PROVENANCECODE_API_URL": "http://127.0.0.1:3001/v1",
+        "PROVENANCECODE_PAT": "dev-key",
+        "PROVENANCECODE_TENANT_ID": "tenant-dev",
+        "PROVENANCECODE_AGENT_ID": "agent-cursor",
+        "PROVENANCECODE_DASHBOARD_URL": "http://127.0.0.1:3002"
+      }
+    }
+  }
+}

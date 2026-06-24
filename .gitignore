@@ -2,8 +2,26 @@ node_modules/
 dist/
 *.log
 .DS_Store
+
+# Secrets — never commit
 .env
-*.tsbuildinfo
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cert
+*.credentials
+secrets/
+
+# npm auth (token is in ${NPM_TOKEN} env var — see .npmrc)
 .npmrc
 
+# Build artefacts
+*.tsbuildinfo
 
+# macOS metadata
+.DS_Store
+**/.DS_Store

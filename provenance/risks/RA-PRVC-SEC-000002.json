@@ -1,0 +1,18 @@
+{
+  "schema": "provenancecode.risk.v2",
+  "risk_id": "RA-PRVC-SEC-000002",
+  "title": "Filesystem path traversal via user-supplied --app-code, --area, and artifact ID arguments",
+  "description": "User-supplied values passed to --app-code and --area (and artifact IDs in tap/act/meo/spec/mistake show commands) were concatenated directly into file paths via path.join() without character validation or root-boundary checks. A crafted value containing ../ or absolute path segments could escape the provenance/ directory and read or write files anywhere the process has access.",
+  "severity": "high",
+  "status": "mitigated",
+  "probability": "low",
+  "impact": "Read: arbitrary file disclosure. Write: overwrite of files outside the provenance directory (e.g. .env, SSH keys, git config). Requires attacker to control CLI arguments, which in practice means a malicious script or IDE automation passing crafted values.",
+  "mitigation": "validateCode() added to utils.ts — enforces ^[A-Z0-9_-]{1,16}$/i allowlist on all --app-code and --area inputs, called in index.ts before every command dispatch. safePath() added to utils.ts — verifies resolved path stays under the artifact directory root, used in all show/done path construction in runtime.ts and artifact.ts. Mitigated in v2.2.0.",
+  "owner": "kierandesmond",
+  "tags": ["filesystem", "input-validation"],
+  "linked_decisions": [],
+  "timestamps": {
+    "created_at": "2026-06-24T10:56:00Z",
+    "updated_at": "2026-06-24T10:56:00Z"
+  }
+}

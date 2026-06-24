@@ -5,6 +5,58 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-06-24
+
+### Fixed — Starter pack correctness and security hardening
+
+#### `prvc starterpack add cursor` — rules and hook scripts now emit v2.0 content
+- **`generateCursorRules()`** completely rewritten — previously emitted obsolete G2/v2.0 content; now generates the full ProvenanceCode Standard v2.0 rules covering DEO decisions, RA risks, SPEC, MR, TAP, ACT, and MEO artifacts.
+- **`generateClaudeRules()`** and **`generateAntigravityRules()`** updated to use `id_format.project` / `id_format.subproject` from the current config instead of the removed legacy `defaultAppCode` / `defaultArea` fields. Running these generators on a DEO v1.0 config no longer produces `undefined` literals in the output.
+- **`generateSessionStartScript()`** synced with the improved installed hook: now performs a `GET /agents/{tenant}/{agentId}` pre-check before registering, uses the full capability list (`k8s.*`, `terraform.*`, `helm.*`, `gcloud.*`), and emits a JSON `additional_context` response.
+
+#### `prvc tap done` — new lifecycle transition action
+- Added `done` (alias: `close`) action to the `tap` command.
+- Usage: `prvc tap done TAP-000001 [--outcome succeeded|failed|blocked|partial] [--human-review]`
+- Sets `lifecycle.state`, `timestamps.ended_at`, `timestamps.attested_at`, and marks `enforcement.validated: true`.
+- Idempotent: warns and exits cleanly if the TAP is already closed.
+
+#### `prvc validate` — `--track` flag and full artifact counts
+- Added `--track <repo|runtime|all>` option (default: `all`).
+- Validate display now reports counts across all 7 artifact types: DEO, RA, SPEC, MR, TAP, ACT, MEO — replacing the old decisions/risks-only count.
+
+#### `types.ts` — stricter lifecycle state types
+- Added `TapLifecycleState` and `MeoLifecycleState` union types aligned with the JSON schemas.
+- `TapRecord.lifecycle.state` and `MeoRecord.lifecycle.state` now use these types instead of `string`.
+
+#### Security — OWASP NPM Security Cheat Sheet hardening
+
+**OWASP #1 — Avoid publishing secrets:**
+- **CRITICAL**: Removed hardcoded npm auth token from `.npmrc`. Token now uses `${NPM_TOKEN}` environment variable interpolation (never committed to git).
+- Replaced the `.npmignore` denylist with an explicit `files` allowlist in `package.json` — only `dist/`, `README.md`, and `LICENSE` are published. This is the primary control; all other files (source, docs, `.cursor/`, `.github/`) are excluded by default.
+
+**OWASP #2 — Enforce the lockfile:**
+- CI publish workflow uses `npm ci` (not `npm install`) to ensure deterministic, lockfile-enforced installs.
+
+**OWASP #3 — Minimize attack surfaces:**
+- Added `ignore-scripts=true` to `.npmrc` — prevents arbitrary postinstall scripts from third-party packages executing during install.
+
+**OWASP #5 — Audit for vulnerabilities:**
+- `prepublishOnly` now runs `npm audit --audit-level=high` before every publish. Releases with high/critical CVEs in dependencies will fail to publish.
+- CI workflow runs a dedicated audit step before building.
+
+**OWASP #7 — Responsible disclosure:**
+- Added `SECURITY.md` with private reporting address, triage SLA, and coordinated disclosure policy.
+
+**OWASP #11 — Trusted publishers (OIDC):**
+- Added `.github/workflows/publish.yml` — publishes via GitHub Actions OIDC, eliminating long-lived npm tokens from CI. Uses `npm publish --provenance` to attach a Sigstore attestation to every release.
+- Publish workflow validates the tarball contents before publishing (fails if any `src/`, `.npmrc`, or `.env` files are detected in the tarball).
+
+**Additional hardening:**
+- `.gitignore` expanded to cover `.env.*`, `*.pem`, `*.key`, `*.cert`, and `secrets/`.
+- Source maps (`"sourceMap": false`, `"declarationMap": false` in `tsconfig.json`) — internal TypeScript structure not recoverable from the published package.
+
+---
+
 ## [Unreleased] - 2026-05-08
 
 ### Added — `prvc starterpack add cursor` enhancements

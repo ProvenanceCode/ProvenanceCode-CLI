@@ -1,17 +1,26 @@
 {
   "name": "provenancecode-cli",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "author": "KDDLC AI Solutions SL & Kieran Desmond <kieran.desmond@embankai.com>",
   "description": "ProvenanceCode CLI — DEO v1.0, SPEC, MR, TAP, ACT, MEO provenance management",
   "main": "dist/index.js",
   "bin": {
     "prvc": "dist/index.js"
   },
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "scripts": {
     "build": "tsc && npm run copy-schemas",
     "copy-schemas": "mkdir -p dist/schemas && cp src/schemas/*.json dist/schemas/",
     "dev": "tsc --watch",
-    "prepublishOnly": "npm run build",
+    "prepublishOnly": "npm run build && npm audit --audit-level=high",
     "test": "echo \"Error: no test specified\" && exit 1",
     "prvc": "node dist/index.js",
     "prvc:help": "npm run prvc -- --help",
@@ -40,18 +49,18 @@
     "node": ">=14.0.0"
   },
   "dependencies": {
-    "ajv": "^8.12.0",
-    "ajv-formats": "^2.1.1",
-    "chalk": "^4.1.2",
-    "commander": "^11.1.0",
-    "fs-extra": "^11.2.0",
-    "inquirer": "^8.2.6"
+    "ajv": "8.20.0",
+    "ajv-formats": "2.1.1",
+    "chalk": "4.1.2",
+    "commander": "11.1.0",
+    "fs-extra": "11.2.0",
+    "inquirer": "8.2.7"
   },
   "devDependencies": {
-    "@types/fs-extra": "^11.0.4",
-    "@types/inquirer": "^8.2.10",
-    "@types/node": "^20.10.6",
-    "typescript": "^5.3.3"
+    "@types/fs-extra": "11.0.4",
+    "@types/inquirer": "8.2.10",
+    "@types/node": "20.10.6",
+    "typescript": "5.3.3"
   },
   "directories": {
     "example": "examples"

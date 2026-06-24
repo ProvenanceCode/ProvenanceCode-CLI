@@ -1,28 +1,51 @@
-# Source files
+# Source TypeScript (compiled output in dist/ is what ships)
 src/
 tsconfig.json
 
-# Tests (when added)
+# Source maps — do not leak internal structure
+dist/**/*.map
+dist/**/*.d.ts.map
+
+# Tests
 test/
 tests/
 *.test.ts
 *.spec.ts
+*.test.js
+*.spec.js
 
-# Development files
+# Development tooling
 .vscode/
 .idea/
+.cursor/
 *.log
 .DS_Store
+.npmrc
 
 # Examples
 examples/
 
-# Documentation
-CONTRIBUTING.md
+# Architecture and planning docs (internal)
 CHANGELOG.md
+CONTRIBUTING.md
+CLARIFICATION_SUMMARY.md
+CLI_ARCHITECTURE.txt
+CLI_VS_NPM_SCRIPTS.md
+DEPLOYMENT.md
+DOCUMENTATION_INDEX.md
+FEATURES.md
+GITHUB_RELEASE.md
+IMPLEMENTATION_COMPLETE.md
+NEW_FEATURES.md
+PROJECT_SUMMARY.md
+PUBLICATION_SUCCESS.md
+PUBLISHED.md
+QUICKSTART.md
+QUICK_REFERENCE.md
+READY_TO_PUBLISH.md
+V2_COMPLIANCE.md
 
 # Git
 .git/
 .gitignore
-
-
+.github/

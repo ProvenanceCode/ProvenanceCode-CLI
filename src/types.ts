@@ -1,5 +1,14 @@
 export type RiskLevel = 'low' | 'medium' | 'high' | 'critical';
+
+// DEO decision lifecycle
 export type LifecycleState = 'draft' | 'proposed' | 'accepted' | 'rejected' | 'superseded';
+
+// TAP task lifecycle
+export type TapLifecycleState = 'in_progress' | 'completed' | 'blocked' | 'failed' | 'superseded';
+
+// MEO memory lifecycle (matches meo.schema.json enum)
+export type MeoLifecycleState = 'forming' | 'active' | 'stale' | 'consolidated' | 'pruned' | 'superseded' | 'archived';
+
 export type PolicyDecision = 'ALLOW' | 'DENY' | 'STEP_UP';
 
 export interface ProvenanceConfig {
@@ -152,7 +161,7 @@ export interface TapRecord {
   id: string;
   title: string;
   version: number;
-  lifecycle: { state: 'in_progress' | 'completed' | 'blocked' | 'failed' | 'superseded' };
+  lifecycle: { state: TapLifecycleState };
   timestamps: { started_at: string; ended_at: string | null; attested_at?: string | null };
   runtime: { agent: string; model: string; session_id?: string | null };
   git: { branch: string; commit_sha: string; repo?: string; changed_files?: string[] };
@@ -188,7 +197,7 @@ export interface MeoRecord {
   title: string;
   version: number;
   subtype: 'working' | 'dream';
-  lifecycle: { state: string };
+  lifecycle: { state: MeoLifecycleState };
   timestamps: { created_at: string; consolidated_at?: string | null };
   runtime: { agent: string };
   scope: { domain: string };

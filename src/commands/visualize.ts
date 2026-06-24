@@ -33,6 +33,19 @@ export function visualizeCommand(baseDir: string, type: string, options: any = {
 }
 
 /**
+ * Resolves and validates an output path. Rejects writes to system directories.
+ */
+function safeOutputPath(output: string): string {
+  const resolved = path.resolve(output);
+  const forbidden = ['/etc', '/sys', '/proc', '/boot', '/dev', '/root', '/bin', '/sbin', '/usr/bin', '/usr/sbin'];
+  if (forbidden.some(p => resolved === p || resolved.startsWith(p + path.sep))) {
+    console.error(chalk.red(`❌ Output path not allowed: ${resolved}`));
+    process.exit(1);
+  }
+  return resolved;
+}
+
+/**
  * Generate decision graph
  */
 function generateGraph(baseDir: string, config: any, options: any): void {
@@ -44,16 +57,18 @@ function generateGraph(baseDir: string, config: any, options: any): void {
   if (format === 'mermaid') {
     const mermaid = generateMermaidGraph(decisions, risks);
     if (output) {
-      fs.writeFileSync(output, mermaid);
-      console.log(chalk.green(`✓ Mermaid graph saved to ${output}`));
+      const resolved = safeOutputPath(output);
+      fs.writeFileSync(resolved, mermaid);
+      console.log(chalk.green(`✓ Mermaid graph saved to ${resolved}`));
     } else {
       console.log(mermaid);
     }
   } else {
+    const resolved = safeOutputPath(output);
     const html = generateHTMLGraph(decisions, risks);
-    fs.writeFileSync(output, html);
-    console.log(chalk.green(`✓ Interactive graph saved to ${output}`));
-    console.log(chalk.gray(`  Open: file://${path.resolve(output)}`));
+    fs.writeFileSync(resolved, html);
+    console.log(chalk.green(`✓ Interactive graph saved to ${resolved}`));
+    console.log(chalk.gray(`  Open: file://${resolved}`));
   }
 }
 
@@ -77,11 +92,12 @@ function generateTimeline(baseDir: string, config: any, options: any): void {
     });
   }
 
+  const resolved = safeOutputPath(output);
   const html = generateTimelineHTML(decisions);
-  fs.writeFileSync(output, html);
+  fs.writeFileSync(resolved, html);
   
-  console.log(chalk.green(`✓ Timeline saved to ${output}`));
-  console.log(chalk.gray(`  Open: file://${path.resolve(output)}`));
+  console.log(chalk.green(`✓ Timeline saved to ${resolved}`));
+  console.log(chalk.gray(`  Open: file://${resolved}`));
 }
 
 /**
