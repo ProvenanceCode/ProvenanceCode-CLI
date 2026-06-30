@@ -24,7 +24,7 @@ const program = new Command();
 program
   .name('prvc')
   .description('ProvenanceCode CLI — DEO v1.0, SPEC, MR, TAP, ACT, MEO provenance management')
-  .version('2.2.0');
+  .version('2.3.0');
 
 // Install command (NEW)
 program

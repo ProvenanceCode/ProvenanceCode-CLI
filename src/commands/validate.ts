@@ -51,12 +51,28 @@ export function validateCommand(baseDir: string, options: { mode?: string; track
   const actCount = getArtifactFiles(actionsPath, 'action.json').length;
   const meoCount = getArtifactFiles(memoriesPath, 'memory.json').length;
 
+  // Count acceptance receipts — flat JSON files in decisions dir with acceptance.v1 schema
+  let arCount = 0;
+  if (fs.existsSync(decisionsPath)) {
+    arCount = fs.readdirSync(decisionsPath)
+      .filter(f => f.endsWith('.json') && f !== 'TEMPLATE.json')
+      .filter(f => {
+        try {
+          const d = fs.readJsonSync(path.join(decisionsPath, f));
+          return d.schema === 'provenancecode.acceptance.v1';
+        } catch { return false; }
+      }).length;
+  }
+
   if (track === 'repo' || track === 'all') {
     console.log(chalk.bold('Repo Governance (v1.x)'));
-    console.log(chalk.gray(`  DEO decisions : ${decCount}`));
-    console.log(chalk.gray(`  RA risks       : ${rskCount}`));
-    console.log(chalk.gray(`  SPEC records   : ${spcCount}`));
-    console.log(chalk.gray(`  MR mistakes    : ${mrCount}`));
+    console.log(chalk.gray(`  DEO decisions  : ${decCount}`));
+    console.log(chalk.gray(`  RA risks        : ${rskCount}`));
+    console.log(chalk.gray(`  SPEC records    : ${spcCount}`));
+    console.log(chalk.gray(`  MR mistakes     : ${mrCount}`));
+    if (arCount > 0) {
+      console.log(chalk.gray(`  Acceptance rcpts: ${arCount}`));
+    }
   }
   if (track === 'runtime' || track === 'all') {
     console.log(chalk.bold('Runtime Governance (v2.0)'));

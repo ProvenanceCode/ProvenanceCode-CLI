@@ -1,0 +1,45 @@
+{
+  "schema": "provenancecode.risk@1.0",
+  "ra_id": "RA-000001",
+  "repo": {
+    "org": "provenancecode",
+    "name": "provenancecode-cli"
+  },
+  "ref": "pc://provenancecode/provenancecode-cli/risk/RA-000001",
+  "title": "Supply chain: unpinned production dependency versions allow silent upgrades",
+  "status": "closed",
+  "created_at": "2026-06-24T10:56:00Z",
+  "updated_at": "2026-06-30T17:00:00Z",
+  "risk_statement": "All 6 production dependencies (ajv, ajv-formats, chalk, commander, fs-extra, inquirer) used caret (^) ranges in package.json, permitting npm to resolve newer minor/patch versions than those recorded in the lockfile. A compromised minor-version release of any dependency could execute arbitrary code on developer machines via postinstall hooks or payload injection.",
+  "severity": "high",
+  "likelihood": "low",
+  "scope": {
+    "paths": ["package.json", "package-lock.json"],
+    "components": ["npm-dependencies", "supply-chain"]
+  },
+  "acceptance": {
+    "accepted_by": "kierandesmond",
+    "accepted_at": "2026-06-24T10:56:00Z",
+    "expires_at": "2027-06-24T00:00:00Z",
+    "reason": "Risk mitigated in v2.2.0: all 6 production dependencies pinned to exact versions. .npmrc enforces save-exact=true. CI uses npm ci. prepublishOnly runs npm audit --audit-level=high."
+  },
+  "mitigations": [
+    {
+      "type": "dependency-pinning",
+      "detail": "All 6 production dependencies pinned to exact versions in package.json (no ^ or ~ ranges)."
+    },
+    {
+      "type": "lockfile-enforcement",
+      "detail": ".npmrc sets save-exact=true. CI installs via npm ci --ignore-scripts to enforce the lockfile."
+    },
+    {
+      "type": "audit-gate",
+      "detail": "prepublishOnly script runs npm audit --audit-level=high, blocking publish on any high/critical finding."
+    }
+  ],
+  "links": {
+    "decisions": [],
+    "specs": [],
+    "mistakes": []
+  }
+}

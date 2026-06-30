@@ -1,0 +1,24 @@
+{
+  "schema": "provenancecode.decision.v1",
+  "id": "DEC-PRVC-SCHEMA-0000002",
+  "title": "Adopt canonical provenancecode.risk@1.0 schema; retire G2 risk.v2 format; bundle acceptance-receipt.schema.json",
+  "version": 1,
+  "lifecycle": {
+    "state": "accepted"
+  },
+  "timestamps": {
+    "created_at": "2026-06-30T17:00:00Z",
+    "accepted_at": "2026-06-30T17:00:00Z"
+  },
+  "actors": {
+    "author": "kierandesmond"
+  },
+  "outcome": "CLI v2.3.0 adopts provenancecode.risk@1.0 as the canonical risk schema. risk.g2.schema.json is retained for backwards-compatible validation of legacy records (with a migration warning). The three internal risk records (previously RA-PRVC-SEC-000001/2/3) are migrated to RA-000001/2/3 in risk@1.0 format. acceptance-receipt.schema.json is bundled and validation support added to prvc validate.",
+  "rationale": "The CLI was shipping risk.g2.schema.json (provenancecode.risk.v2) which does not exist in the provenancecode-standard repo. The canonical schema risk@1.0 was present in the standard with a completely different structure. Alignment with the standard is required for interoperability with Verity and AgentOS. The G2 format is kept as a fallback validator only, never as a generated format.",
+  "risk": {
+    "level": "low",
+    "description": "Existing G2-format risk records in developer repos will trigger a migration warning on prvc validate. No automatic migration is performed; developers must manually update or re-create their risk records. This is an acceptable breaking change for a tool in early adoption."
+  },
+  "problem": "The CLI's bundled risk.g2.schema.json was a custom format (provenancecode.risk.v2) not present in the provenancecode-standard repo. The canonical standard defines risk as provenancecode.risk@1.0 with a different structure (ra_id, risk_statement, likelihood, acceptance block, mitigations array).",
+  "tags": ["schema", "standard-compliance", "risk", "acceptance-receipt"]
+}

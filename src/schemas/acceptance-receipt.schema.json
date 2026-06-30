@@ -1,0 +1,48 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ProvenanceCode Acceptance Receipt",
+  "type": "object",
+  "required": [
+    "schema",
+    "decision_id",
+    "accepted_at",
+    "accepted_by",
+    "decision_sha256",
+    "commit_sha",
+    "attestation"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "provenancecode.acceptance.v1"
+    },
+    "decision_id": {
+      "type": "string",
+      "pattern": "^DEC-\\d{6}$"
+    },
+    "accepted_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "accepted_by": {
+      "type": "string",
+      "minLength": 1
+    },
+    "decision_sha256": {
+      "type": "string",
+      "minLength": 64,
+      "maxLength": 64
+    },
+    "commit_sha": {
+      "type": "string",
+      "minLength": 40
+    },
+    "attestation": {
+      "type": [
+        "object",
+        "null"
+      ]
+    }
+  }
+}

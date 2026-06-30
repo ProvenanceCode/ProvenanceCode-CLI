@@ -1,0 +1,24 @@
+{
+  "schema": "provenancecode.decision.v1",
+  "id": "DEC-PRVC-SCHEMA-0000001",
+  "title": "CLI decision.v1.schema.json diverges from standard: stricter additionalProperties and timestamp formats",
+  "version": 1,
+  "lifecycle": {
+    "state": "accepted"
+  },
+  "timestamps": {
+    "created_at": "2026-06-30T17:00:00Z",
+    "accepted_at": "2026-06-30T17:00:00Z"
+  },
+  "actors": {
+    "author": "kierandesmond"
+  },
+  "outcome": "The CLI retains its stricter version of decision.v1.schema.json (additionalProperties: false on all sub-objects, format: date-time on timestamps, links.pr as array-only) rather than reverting to the standard's looser version. A proposal to upstream these changes to provenancecode-standard is deferred to a separate contribution.",
+  "rationale": "The CLI's tighter schema was introduced during v2.2.0 hardening to enforce data quality. Reverting to the standard's additionalProperties: true would allow garbage fields in records created by prvc. The divergence is intentional and documented here. The stricter version is the desired direction for the standard; it should be proposed upstream rather than silently reverted.",
+  "risk": {
+    "level": "low",
+    "description": "Records created by other ecosystem tools (Verity, AgentOS) with extra top-level fields will fail CLI validation. This is an acceptable trade-off as prvc is the reference implementation and these tools are not yet in production use against this CLI version."
+  },
+  "problem": "The provenancecode-standard repo uses additionalProperties: true and does not enforce format: date-time on timestamps. The CLI tightened both during v2.2.0 security hardening without a corresponding standard change.",
+  "tags": ["schema", "standard-compliance", "decision.v1"]
+}

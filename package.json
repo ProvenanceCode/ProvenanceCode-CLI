@@ -1,6 +1,6 @@
 {
   "name": "provenancecode-cli",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "author": "KDDLC AI Solutions SL & Kieran Desmond <kieran.desmond@embankai.com>",
   "description": "ProvenanceCode CLI — DEO v1.0, SPEC, MR, TAP, ACT, MEO provenance management",
   "main": "dist/index.js",

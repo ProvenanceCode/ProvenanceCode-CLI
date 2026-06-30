@@ -7,7 +7,9 @@ import { getDecisionFiles, getRiskFiles, getArtifactFiles, validateDecisionId, v
 
 // Load schemas
 const decisionSchema = require('./schemas/decision.v1.schema.json');
-const riskSchema = require('./schemas/risk.g2.schema.json');
+const riskSchema     = require('./schemas/risk.schema.json');        // canonical risk@1.0
+const riskG2Schema   = require('./schemas/risk.g2.schema.json');     // legacy risk.v2 (backwards compat)
+const acceptanceSchema = require('./schemas/acceptance-receipt.schema.json');
 const specSchema = require('./schemas/spec.schema.json');
 const mistakeSchema = require('./schemas/mistake.schema.json');
 const tapSchema = require('./schemas/tap.schema.json');
@@ -19,6 +21,9 @@ const OUTDATED_SCHEMA_IDS = [
   'provenancecode.decision.v2',
   'https://provenancecode.org/schemas/decision.g2.schema.json'
 ];
+
+// Legacy risk schema identifier — validated against risk.g2.schema.json (backwards compat)
+const LEGACY_RISK_SCHEMA_ID = 'provenancecode.risk.v2';
 
 /**
  * Create an AJV instance with schemas loaded
@@ -34,6 +39,8 @@ function createValidator(): Ajv {
 
   ajv.addSchema(decisionSchema, 'decision');
   ajv.addSchema(riskSchema, 'risk');
+  ajv.addSchema(riskG2Schema, 'risk-g2');
+  ajv.addSchema(acceptanceSchema, 'acceptance');
   ajv.addSchema(specSchema, 'spec');
   ajv.addSchema(mistakeSchema, 'mistake');
   ajv.addSchema(tapSchema, 'tap');
@@ -108,61 +115,86 @@ function validateDecisionFile(filePath: string, ajv: Ajv, result: ValidationResu
 }
 
 /**
- * Validate a single risk file
+ * Validate a single risk file.
+ * Supports both canonical risk@1.0 and legacy risk.v2 (G2) formats.
  */
 function validateRiskFile(filePath: string, ajv: Ajv, result: ValidationResult): void {
   try {
     const data = fs.readJsonSync(filePath);
+    const schemaId: string | undefined = data.schema;
 
-    // Validate against schema
-    const valid = ajv.validate('risk', data);
-
-    if (!valid && ajv.errors) {
-      ajv.errors.forEach(error => {
-        result.errors.push({
-          file: filePath,
-          message: `Schema validation failed: ${error.message}`,
-          details: error
+    if (schemaId === LEGACY_RISK_SCHEMA_ID) {
+      // Legacy G2 format — validate against risk.g2.schema.json, warn about upgrade
+      const valid = ajv.validate('risk-g2', data);
+      if (!valid && ajv.errors) {
+        ajv.errors.forEach(error => {
+          result.errors.push({ file: filePath, message: `Schema validation failed: ${error.message}`, details: error });
         });
-      });
-      result.valid = false;
-    }
-
-    // Additional validations
-    if (data.risk_id && !validateRiskId(data.risk_id)) {
-      result.errors.push({
-        file: filePath,
-        message: `Invalid risk_id format: ${data.risk_id}`
-      });
-      result.valid = false;
-    }
-
-    // Check schema URL
-    if (data.schema !== 'provenancecode.risk.v2' && data.schema !== 'https://provenancecode.org/schemas/risk.g2.schema.json') {
+        result.valid = false;
+      }
       result.warnings.push({
         file: filePath,
-        message: `Schema identifier should be 'provenancecode.risk.v2' (v2.0 standard): ${data.schema}`
+        message: `Risk record uses legacy schema "${LEGACY_RISK_SCHEMA_ID}" — migrate to "provenancecode.risk@1.0"`
       });
+    } else {
+      // Canonical risk@1.0 format
+      const valid = ajv.validate('risk', data);
+      if (!valid && ajv.errors) {
+        ajv.errors.forEach(error => {
+          result.errors.push({ file: filePath, message: `Schema validation failed: ${error.message}`, details: error });
+        });
+        result.valid = false;
+      }
+
+      if (schemaId && schemaId !== 'provenancecode.risk@1.0') {
+        result.warnings.push({
+          file: filePath,
+          message: `Unrecognised risk schema identifier "${schemaId}" — expected "provenancecode.risk@1.0"`
+        });
+      }
     }
 
-    // Validate linked decision IDs
+    // Validate linked decision IDs (G2 format)
     if (data.linked_decisions && Array.isArray(data.linked_decisions)) {
       data.linked_decisions.forEach((decId: string) => {
         if (!validateDecisionId(decId)) {
-          result.errors.push({
-            file: filePath,
-            message: `Invalid linked decision ID format: ${decId}`
-          });
+          result.errors.push({ file: filePath, message: `Invalid linked decision ID format: ${decId}` });
+          result.valid = false;
+        }
+      });
+    }
+
+    // Validate linked decision IDs (risk@1.0 links.decisions format)
+    if (data.links?.decisions && Array.isArray(data.links.decisions)) {
+      data.links.decisions.forEach((decId: string) => {
+        if (!validateDecisionId(decId)) {
+          result.errors.push({ file: filePath, message: `Invalid links.decisions ID format: ${decId}` });
           result.valid = false;
         }
       });
     }
 
   } catch (error: any) {
-    result.errors.push({
-      file: filePath,
-      message: `Failed to parse JSON: ${error.message}`
-    });
+    result.errors.push({ file: filePath, message: `Failed to parse JSON: ${error.message}` });
+    result.valid = false;
+  }
+}
+
+/**
+ * Validate a single acceptance receipt file (provenancecode.acceptance.v1).
+ */
+function validateAcceptanceFile(filePath: string, ajv: Ajv, result: ValidationResult): void {
+  try {
+    const data = fs.readJsonSync(filePath);
+    const valid = ajv.validate('acceptance', data);
+    if (!valid && ajv.errors) {
+      ajv.errors.forEach(error => {
+        result.errors.push({ file: filePath, message: `Schema validation failed: ${error.message}`, details: error });
+      });
+      result.valid = false;
+    }
+  } catch (error: any) {
+    result.errors.push({ file: filePath, message: `Failed to parse JSON: ${error.message}` });
     result.valid = false;
   }
 }
@@ -248,6 +280,22 @@ export function validateProvenance(baseDir: string, config: ProvenanceConfig): V
   getArtifactFiles(memoriesPath, 'memory.json').forEach(file =>
     validateGenericFile(file, 'meo', ajv, result, 'id', /^MEO-/)
   );
+
+  // Acceptance receipts (v1.x — generated by Verity at merge time, stored alongside decisions)
+  const acceptancesPath = path.join(baseDir, config.paths.decisions);
+  if (fs.existsSync(acceptancesPath)) {
+    fs.readdirSync(acceptancesPath)
+      .filter(f => f.endsWith('.json') && f !== 'TEMPLATE.json')
+      .map(f => path.join(acceptancesPath, f))
+      .forEach(filePath => {
+        try {
+          const data = fs.readJsonSync(filePath);
+          if (data.schema === 'provenancecode.acceptance.v1') {
+            validateAcceptanceFile(filePath, ajv, result);
+          }
+        } catch { /* handled by validateDecisionFile for non-acceptance files */ }
+      });
+  }
 
   return result;
 }

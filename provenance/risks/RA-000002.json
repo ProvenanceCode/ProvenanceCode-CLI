@@ -1,0 +1,45 @@
+{
+  "schema": "provenancecode.risk@1.0",
+  "ra_id": "RA-000002",
+  "repo": {
+    "org": "provenancecode",
+    "name": "provenancecode-cli"
+  },
+  "ref": "pc://provenancecode/provenancecode-cli/risk/RA-000002",
+  "title": "Filesystem path traversal via user-supplied --app-code, --area, and artifact ID arguments",
+  "status": "closed",
+  "created_at": "2026-06-24T10:56:00Z",
+  "updated_at": "2026-06-30T17:00:00Z",
+  "risk_statement": "User-supplied values for --app-code, --area, and artifact IDs (TAP-*, ACT-*, MEO-*, SPEC-*, MR-*) were concatenated directly into file paths via path.join() without character validation or root-boundary checks. A crafted value containing ../ or absolute path segments could escape the provenance/ directory and read or write files anywhere the process has access.",
+  "severity": "high",
+  "likelihood": "low",
+  "scope": {
+    "paths": ["src/utils.ts", "src/index.ts", "src/commands/runtime.ts", "src/commands/artifact.ts", "src/commands/journal.ts"],
+    "components": ["path-construction", "input-validation"]
+  },
+  "acceptance": {
+    "accepted_by": "kierandesmond",
+    "accepted_at": "2026-06-24T10:56:00Z",
+    "expires_at": "2027-06-24T00:00:00Z",
+    "reason": "Risk mitigated in v2.2.0: validateCode() enforces character allowlist on all code/area inputs; safePath() verifies all constructed paths remain under the provenance root."
+  },
+  "mitigations": [
+    {
+      "type": "input-validation",
+      "detail": "validateCode() added to utils.ts — enforces ^[A-Z0-9_-]{1,16}$/i allowlist on all --app-code and --area values before use in path construction."
+    },
+    {
+      "type": "path-boundary-check",
+      "detail": "safePath() added to utils.ts — resolves path and asserts it stays under the intended root directory. Used in tapShow, tapDone, actShow, meoShow, specShow, mistakeShow."
+    },
+    {
+      "type": "output-path-guard",
+      "detail": "journal export, visualize, and export commands validate --output against a forbidden system-path list before writing."
+    }
+  ],
+  "links": {
+    "decisions": [],
+    "specs": [],
+    "mistakes": []
+  }
+}
